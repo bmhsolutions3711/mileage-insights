@@ -145,15 +145,27 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 .mi-cluster[data-state="empty"] .mi-needle,
 .mi-cluster[data-state="idle"]  .mi-needle{opacity:.45}
 
-/* Verdict — the sentence that lands last */
-.mi-verdict{
-  view-transition-name:mi-verdict;
-  min-height:2.8em;text-align:center;font-size:var(--text-lg);line-height:1.45;
-  color:var(--color-fg-dim);padding:2px var(--space-2) var(--space-2);margin:0 auto;max-width:34ch;
+/* Verdict as INDICATORS — a status chip + signed delta, not a sentence.
+   The gauge (color + needle) + number already carry the story; this labels it. */
+.mi-status{
+  view-transition-name:mi-status;
+  display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;
+  min-height:2.2em;margin:4px auto 6px;padding:0 var(--space-3);
 }
-.mi-verdict strong{color:var(--color-fg);font-weight:700}
-.mi-cluster[data-state="safe"] ~ .mi-verdict strong{color:var(--color-primary)}
-.mi-cluster[data-state="over"] ~ .mi-verdict strong{color:var(--color-danger)}
+.mi-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  font-size:var(--text-sm);font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  padding:8px 15px;border-radius:var(--radius-pill);
+  color:var(--color-fg-muted);background:var(--color-panel);border:1px solid var(--color-border);
+}
+.mi-badge::before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor;box-shadow:0 0 9px currentColor}
+.mi-delta{font-family:var(--font-mono);font-weight:700;font-size:var(--text-md);font-variant-numeric:tabular-nums;color:var(--color-fg-muted)}
+.mi-status[data-state="safe"] .mi-badge{color:var(--color-success);background:color-mix(in oklch,var(--color-success),transparent 88%);border-color:color-mix(in oklch,var(--color-success),transparent 66%)}
+.mi-status[data-state="safe"] .mi-delta{color:var(--color-success)}
+.mi-status[data-state="warn"] .mi-badge{color:var(--color-warn);background:color-mix(in oklch,var(--color-warn),transparent 88%);border-color:color-mix(in oklch,var(--color-warn),transparent 66%)}
+.mi-status[data-state="warn"] .mi-delta{color:var(--color-warn)}
+.mi-status[data-state="over"] .mi-badge{color:var(--color-danger);background:color-mix(in oklch,var(--color-danger),transparent 88%);border-color:color-mix(in oklch,var(--color-danger),transparent 66%)}
+.mi-status[data-state="over"] .mi-delta{color:var(--color-danger)}
 
 /* Period chips — quiet */
 .mi-periods{display:flex;gap:6px;justify-content:center;margin:2px 0 12px}
@@ -275,8 +287,8 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 .lite .mi-capture{box-shadow:none}
 
 /* View Transition for the verdict swap */
-::view-transition-old(mi-verdict){animation:mi-vt-out .3s var(--ease-in) forwards}
-::view-transition-new(mi-verdict){animation:mi-vt-in .4s var(--ease-out) .1s both}
+::view-transition-old(mi-status){animation:mi-vt-out .3s var(--ease-in) forwards}
+::view-transition-new(mi-status){animation:mi-vt-in .4s var(--ease-out) .1s both}
 @keyframes mi-vt-out{to{opacity:0;transform:translateY(-4px)}}
 @keyframes mi-vt-in{from{opacity:0;transform:translateY(4px)}}
 
@@ -292,7 +304,7 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
   .mi-splitbar .fill{transition:none}
   .mi-cost .body{transition:none}
   .mi-capture.is-reading::before{animation:none}
-  ::view-transition-old(mi-verdict),::view-transition-new(mi-verdict){animation:none}
+  ::view-transition-old(mi-status),::view-transition-new(mi-status){animation:none}
 }
 </style>
 </head>
@@ -321,7 +333,10 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
       </div>
     </div>
   </section>
-  <p class="mi-verdict" id="miVerdict">Snap your dash to wake the cluster.</p>
+  <div class="mi-status" id="miStatus" data-state="idle">
+    <span class="mi-badge" id="miBadge">Snap to wake</span>
+    <span class="mi-delta" id="miDelta"></span>
+  </div>
 
   <div class="mi-periods" id="miPeriods">
     <button data-p="week">Week</button>
@@ -343,7 +358,7 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
   <!-- COST BREAKDOWN -->
   <div class="mi-card mi-cost" id="miCost">
     <div class="head" id="miCostHead">
-      <span class="line">Real road cost <b id="miCostLine">--</b>/mi — see what's in it</span>
+      <span class="line"><span class="eyebrow">Cost / mi</span> <b id="miCostLine">--</b></span>
       <span class="chev">▾</span>
     </div>
     <div class="body"><div class="inner">
@@ -513,24 +528,23 @@ function rollNumber(to, ms, el = $('miCpm')) {
   el._cancel = () => cancelAnimationFrame(raf);
 }
 
-// ── verdict copy — honest to v1 (variable/road cost, not net profit) ──
-function buildVerdict(cpm, floor, state, split) {
-  const b = split?.business_miles, p = split?.personal_miles;
-  const milePart = (b != null) ? `${fmtMi(b)} business · ${fmtMi(p)} personal mi this ${PERIOD === 'all' ? 'run' : PERIOD}.` : '';
-  if (cpm == null) {
-    if (split && split.need_more) return `One snap logged. <strong>Snap once more</strong> to measure your first miles.`;
-    return `Snapped. ${milePart} Log road expenses to reveal your cost-per-mile.`;
+// ── the verdict as INDICATORS: a status chip + signed delta vs floor ──
+const STATUS_LABEL = { safe: 'Under floor', warn: 'At floor', over: 'Over floor' };
+function setStatus(cpm, floor, state, override) {
+  const wrap = $('miStatus'), badge = $('miBadge'), delta = $('miDelta');
+  let label, dtxt, st;
+  if (override) {                       // explicit prompt (idle / empty / baseline)
+    label = override.label; dtxt = override.delta || ''; st = override.state || 'idle';
+  } else if (cpm == null) {
+    label = 'No cost yet'; dtxt = ''; st = 'idle';
+  } else {
+    const d = cpm - floor;
+    label = STATUS_LABEL[state] || '';
+    dtxt = d === 0 ? 'on floor' : (d < 0 ? '−' : '+') + Math.round(Math.abs(d) * 100) + '¢/mi';
+    st = state;
   }
-  if (state === 'safe') return `Real road cost <strong>${fmt(cpm)}/mi</strong> — under your ${fmt(floor)} floor. ${milePart} Fuel, food & tolls, before the truck payment.`;
-  if (state === 'warn') return `Real road cost <strong>${fmt(cpm)}/mi</strong> — riding your ${fmt(floor)} floor. ${milePart}`;
-  return `Real road cost <strong>${fmt(cpm)}/mi</strong> — ${cents(cpm - floor)} over your ${fmt(floor)} floor, and that's before fixed costs. ${milePart}`;
-}
-
-function setVerdict(html) {
-  const el = $('miVerdict');
-  const run = () => { el.innerHTML = html; };
-  // View Transitions defer their callback to a render opportunity — none happens
-  // when the tab is hidden, so update directly in that case.
+  const run = () => { wrap.dataset.state = st; badge.textContent = label; delta.textContent = dtxt; };
+  // View Transitions defer to a render opportunity (none when hidden) → update directly then.
   if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches && !document.hidden) {
     document.startViewTransition(run);
   } else run();
@@ -548,7 +562,7 @@ function paintGauge(cpm, floor) {
   cl.style.setProperty('--cpm-hue', hue);
   rollNumber(cpm == null ? 0 : cpm, cpm == null ? 0 : 600);
   if (cpm == null) $('miCpm').textContent = '$ —';
-  setVerdict(buildVerdict(cpm, floor, state, LAST_SPLIT));
+  setStatus(cpm, floor, state);
 }
 
 // ── THE WAKE — full ignition-slam + settle + verdict + payoff (snap resolve) ──
@@ -572,7 +586,7 @@ function wakeCluster(cpm, floor) {
     cl.style.setProperty('--cpm-hue', hue);
     requestAnimationFrame(() => { arc.style.transition = ''; ndl.style.transition = ''; });
     rollNumber(cpm, 0);
-    setVerdict(buildVerdict(cpm, floor, state, LAST_SPLIT));
+    setStatus(cpm, floor, state);
     if (!reduce && state === 'safe') payoff($('miCpm'));
     return;
   }
@@ -597,7 +611,7 @@ function wakeCluster(cpm, floor) {
     if (e.propertyName !== 'transform') return;
     ndl.style.willChange = '';
     ndl.removeEventListener('transitionend', _needleHandler); _needleHandler = null;
-    setVerdict(buildVerdict(cpm, floor, state, LAST_SPLIT));
+    setStatus(cpm, floor, state);
     if (state === 'safe') payoff($('miCpm'));
   };
   ndl.addEventListener('transitionend', _needleHandler);
@@ -701,7 +715,7 @@ async function loadAll() {
     if (ins.need_more) {
       $('miCluster').dataset.state = 'empty';
       $('miCpm').textContent = '$ —'; $('miCpm').dataset.v = 0;
-      setVerdict(ins.snaps >= 1 ? `One snap logged. <strong>Snap once more</strong> to wake the cluster.` : `Snap your dash to wake the cluster.`);
+      setStatus(null, FLOOR, 'idle', { label: ins.snaps >= 1 ? 'Snap again' : 'Snap to wake' });
     } else {
       paintGauge(cpm.variable_cpm, FLOOR);   // gentle land to current truth
     }
@@ -738,7 +752,7 @@ $('miCamera').addEventListener('change', async (e) => {
 
     if (LAST_SPLIT && LAST_SPLIT.need_more) {
       $('miCluster').dataset.state = 'empty';
-      setVerdict(`First snap logged — your baseline. <strong>Snap again</strong> down the road to reveal your cost-per-mile.`);
+      setStatus(null, FLOOR, 'idle', { label: 'Baseline set — snap again' });
       toast('Baseline logged ✓');
     } else {
       wakeCluster(cpm, FLOOR);
