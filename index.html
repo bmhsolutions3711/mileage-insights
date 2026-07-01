@@ -358,7 +358,7 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
   <!-- COST BREAKDOWN -->
   <div class="mi-card mi-cost" id="miCost">
     <div class="head" id="miCostHead">
-      <span class="line"><span class="eyebrow">Cost / mi</span> <b id="miCostLine">--</b></span>
+      <span class="line"><span class="eyebrow" id="miCostEyebrow">Cost / mi</span> <b id="miCostLine">--</b></span>
       <span class="chev">▾</span>
     </div>
     <div class="body"><div class="inner">
@@ -492,7 +492,7 @@ async function api(path) {
 }
 
 // ── formatting ──
-const fmt   = n => n == null ? '--' : '$' + Number(n).toFixed(2);
+const fmt   = n => n == null ? '--' : '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtMi = n => n == null ? '--' : Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
 const cents = d => Math.round(Math.abs(d) * 100) + '¢';
 
@@ -660,8 +660,12 @@ function renderSplit(s) {
 const CAT_LABEL = { Gas: 'Fuel', Food: 'Food', Lodging: 'Lodging', Tolls: 'Tolls',
   'Truck Maintenance': 'Maintenance', 'Truck Supplies': 'Supplies', DEF: 'DEF' };
 function renderCost(d) {
-  const cpm = d.variable_cpm;
-  $('miCostLine').textContent = cpm != null ? fmt(cpm) : '--';
+  const cpm = d.variable_cpm;          // backend returns null until snaps span the spend window
+  const spend = d.variable_total || 0;
+  const measuring = (cpm == null && spend > 0);   // real spend, miles don't cover it yet
+  // Collapsed header: $/mi when we have it, else the real road spend for the period.
+  $('miCostEyebrow').textContent = cpm != null ? 'Cost / mi' : (spend > 0 ? 'Road spend' : 'Cost / mi');
+  $('miCostLine').textContent = cpm != null ? fmt(cpm) : (spend > 0 ? fmt(spend) : '--');
   const rows = Object.entries(d.variable_by_category || {})
     .sort((a, b) => (b[1].cost || 0) - (a[1].cost || 0));
   const over = (rowCpm) => (rowCpm != null && rowCpm > FLOOR) ? 1 : 0;
@@ -671,10 +675,12 @@ function renderCost(d) {
       <span class="v">${fmt(v.cost)}<small>${v.cpm != null ? fmt(v.cpm) + '/mi' : ''}</small></span>
     </div>`).join('');
   if (!rows.length) html = `<div class="mi-note">No road expenses in this window yet. Fuel, food & tolls flow in from your finances as you categorize them.</div>`;
-  html += `<div class="lrow tot"><span class="k">All-in variable</span>
-    <span class="v">${fmt(d.variable_total)}<small>${cpm != null ? fmt(cpm) + '/mi' : '—'}</small></span></div>`;
+  html += `<div class="lrow tot"><span class="k">Road spend</span>
+    <span class="v">${fmt(spend)}<small>${cpm != null ? fmt(cpm) + '/mi' : (measuring ? 'measuring $/mi' : '—')}</small></span></div>`;
   $('miCostRows').innerHTML = html;
-  $('miCostNote').textContent = d.note || '';
+  $('miCostNote').textContent = measuring
+    ? `Road spend is real (${d.expense_from || ''}–${d.expense_to || ''}). $/mi is measuring — snap daily until your snaps reach back across this window.`
+    : (d.note || '');
 }
 
 // ── history ──
@@ -717,7 +723,10 @@ async function loadAll() {
       $('miCpm').textContent = '$ —'; $('miCpm').dataset.v = 0;
       setStatus(null, FLOOR, 'idle', { label: ins.snaps >= 1 ? 'Snap again' : 'Snap to wake' });
     } else {
-      paintGauge(cpm.variable_cpm, FLOOR);   // gentle land to current truth
+      const cpmVal = cpm.variable_cpm;           // backend: null until snaps span the spend window
+      paintGauge(cpmVal, FLOOR);                 // gentle land to current truth
+      if (cpmVal == null && cpm.variable_total > 0)   // real spend, miles don't cover it yet
+        setStatus(null, FLOOR, 'idle', { label: 'Measuring', delta: fmt(cpm.variable_total) + ' road' });
     }
     _cold = false;
   } catch (e) {
@@ -744,8 +753,8 @@ $('miCamera').addEventListener('change', async (e) => {
 
     // fold in the fresh split, pull the CPM for the period, then WAKE
     if (data.split) renderSplit(data.split);
-    let cpm = null;
-    try { const c = await api(`/api/cpm?period=${PERIOD}`); renderCost(c); cpm = c.variable_cpm; } catch (_) {}
+    let cpmResp = null;
+    try { cpmResp = await api(`/api/cpm?period=${PERIOD}`); renderCost(cpmResp); } catch (_) {}
     // refresh split + history for the period in the background
     api(`/api/insights?period=${PERIOD}`).then(renderSplit).catch(() => {});
     api(`/api/snaps?limit=40`).then(h => renderHistory(h.snaps)).catch(() => {});
@@ -755,7 +764,10 @@ $('miCamera').addEventListener('change', async (e) => {
       setStatus(null, FLOOR, 'idle', { label: 'Baseline set — snap again' });
       toast('Baseline logged ✓');
     } else {
-      wakeCluster(cpm, FLOOR);
+      const cpmVal = cpmResp ? cpmResp.variable_cpm : null;
+      wakeCluster(cpmVal, FLOOR);
+      if (cpmVal == null && cpmResp && cpmResp.variable_total > 0)   // measuring: real spend, miles don't span it
+        setStatus(null, FLOOR, 'idle', { label: 'Measuring', delta: fmt(cpmResp.variable_total) + ' road' });
       toast('Read ✓');
     }
     setTimeout(() => wall.classList.remove('show'), 2600);
@@ -822,7 +834,7 @@ loadAll();
 
 // Debug bridge — lets QA drive the exact production reveal code in-browser.
 // No secrets, read-only wrappers; harmless in prod (survival tool, not sensitive).
-window.__mi = { wakeCluster, paintGauge, verdictState, renderSplit, renderCost, setFloor,
+window.__mi = { wakeCluster, paintGauge, verdictState, renderSplit, renderCost, setStatus, setFloor,
   get state(){ return { API_URL, PERIOD, FLOOR, LAST_SPLIT, cpm: $('miCpm').dataset.v }; } };
 </script>
 </body>
