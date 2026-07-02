@@ -231,6 +231,9 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 .mi-entry .reads{display:flex;gap:14px;margin-top:4px}
 .mi-entry .reads span{font-size:var(--text-xs);color:var(--color-fg-dim);font-family:var(--font-mono);font-variant-numeric:tabular-nums}
 .mi-entry .reads span i{color:var(--color-fg-subtle);font-style:normal;font-family:var(--font-sans);margin-right:3px}
+.mi-entry .del{flex:0 0 auto;background:none;border:none;color:var(--color-fg-subtle);
+  font-size:var(--text-sm);padding:8px 6px;cursor:pointer;opacity:.55;border-radius:var(--radius-md)}
+.mi-entry .del:active{opacity:1;color:var(--color-danger)}
 .mi-empty{text-align:center;color:var(--color-fg-subtle);font-size:var(--text-sm);padding:22px 8px}
 
 /* ── CAPTURE — persistent thumb anchor, the one door to the moment ──────── */
@@ -494,7 +497,9 @@ async function api(path) {
 // ── formatting ──
 const fmt   = n => n == null ? '--' : '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtMi = n => n == null ? '--' : Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
-const cents = d => Math.round(Math.abs(d) * 100) + '¢';
+// Server-derived strings (Vision-OCR trailer names, finance category names) must be
+// escaped before innerHTML — this page holds the bearer token in localStorage.
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 function toast(msg) {
   const t = $('miToast'); t.textContent = msg; t.classList.add('show');
@@ -541,6 +546,7 @@ function setStatus(cpm, floor, state, override) {
     const d = cpm - floor;
     label = STATUS_LABEL[state] || '';
     dtxt = d === 0 ? 'on floor' : (d < 0 ? '−' : '+') + Math.round(Math.abs(d) * 100) + '¢/mi';
+    if (!COVERAGE_OK && TXN_THROUGH) dtxt += ' · thru ' + TXN_THROUGH.slice(5);  // provisional: costs lag miles
     st = state;
   }
   const run = () => { wrap.dataset.state = st; badge.textContent = label; delta.textContent = dtxt; };
@@ -587,7 +593,7 @@ function wakeCluster(cpm, floor) {
     requestAnimationFrame(() => { arc.style.transition = ''; ndl.style.transition = ''; });
     rollNumber(cpm, 0);
     setStatus(cpm, floor, state);
-    if (!reduce && state === 'safe') payoff($('miCpm'));
+    if (!reduce && state === 'safe' && COVERAGE_OK) payoff($('miCpm'));   // never celebrate provisional data
     return;
   }
 
@@ -612,7 +618,7 @@ function wakeCluster(cpm, floor) {
     ndl.style.willChange = '';
     ndl.removeEventListener('transitionend', _needleHandler); _needleHandler = null;
     setStatus(cpm, floor, state);
-    if (state === 'safe') payoff($('miCpm'));
+    if (state === 'safe' && COVERAGE_OK) payoff($('miCpm'));   // never celebrate provisional data
   };
   ndl.addEventListener('transitionend', _needleHandler);
   // safety net: if transitionend never fires (edge cases), land the verdict anyway
@@ -659,11 +665,13 @@ function renderSplit(s) {
 // ── cost breakdown ──
 const CAT_LABEL = { Gas: 'Fuel', Food: 'Food', Lodging: 'Lodging', Tolls: 'Tolls',
   'Truck Maintenance': 'Maintenance', 'Truck Supplies': 'Supplies', DEF: 'DEF' };
+let COVERAGE_OK = true, TXN_THROUGH = null;   // set by renderCost; gates celebration
 function renderCost(d) {
-  const cpm = d.variable_cpm;          // backend returns null until snaps span the spend window
+  const cpm = d.variable_cpm;          // null = no expenses OR no measurable business miles
   const spend = d.variable_total || 0;
-  const measuring = (cpm == null && spend > 0);   // real spend, miles don't cover it yet
-  // Collapsed header: $/mi when we have it, else the real road spend for the period.
+  COVERAGE_OK = d.coverage_complete !== false;
+  TXN_THROUGH = d.txn_through || null;
+  const noMiles = (cpm == null && spend > 0);   // spend exists but business miles = 0
   $('miCostEyebrow').textContent = cpm != null ? 'Cost / mi' : (spend > 0 ? 'Road spend' : 'Cost / mi');
   $('miCostLine').textContent = cpm != null ? fmt(cpm) : (spend > 0 ? fmt(spend) : '--');
   const rows = Object.entries(d.variable_by_category || {})
@@ -671,16 +679,17 @@ function renderCost(d) {
   const over = (rowCpm) => (rowCpm != null && rowCpm > FLOOR) ? 1 : 0;
   let html = rows.map(([cat, v]) => `
     <div class="lrow" data-over="${over(v.cpm)}">
-      <span class="k">${CAT_LABEL[cat] || cat}</span>
+      <span class="k">${esc(CAT_LABEL[cat] || cat)}</span>
       <span class="v">${fmt(v.cost)}<small>${v.cpm != null ? fmt(v.cpm) + '/mi' : ''}</small></span>
     </div>`).join('');
   if (!rows.length) html = `<div class="mi-note">No road expenses in this window yet. Fuel, food & tolls flow in from your finances as you categorize them.</div>`;
   html += `<div class="lrow tot"><span class="k">Road spend</span>
-    <span class="v">${fmt(spend)}<small>${cpm != null ? fmt(cpm) + '/mi' : (measuring ? 'measuring $/mi' : '—')}</small></span></div>`;
+    <span class="v">${fmt(spend)}<small>${cpm != null ? fmt(cpm) + '/mi' : (noMiles ? 'no business mi' : '—')}</small></span></div>`;
   $('miCostRows').innerHTML = html;
-  $('miCostNote').textContent = measuring
-    ? `Road spend is real (${d.expense_from || ''}–${d.expense_to || ''}). $/mi is measuring — snap daily until your snaps reach back across this window.`
-    : (d.note || '');
+  const notes = [];
+  if (noMiles) notes.push(`Spend is real but no business miles were measured in this window — check the snaps' trailer names.`);
+  if (!COVERAGE_OK && TXN_THROUGH) notes.push(`Cost data imported through ${TXN_THROUGH} — the number is provisional until newer statements land.`);
+  $('miCostNote').textContent = notes.join(' ') || d.note || '';
 }
 
 // ── history ──
@@ -694,13 +703,14 @@ function renderHistory(snaps) {
     return `<div class="mi-entry">
       <span class="glyph" style="color:${color};background:currentColor"></span>
       <div class="mid">
-        <div class="top"><span class="date">${date}</span><span class="tname">${s.trailer || s.trailer_name || ''}</span></div>
+        <div class="top"><span class="date">${esc(date)}</span><span class="tname">${esc(s.trailer || s.trailer_name || '')}</span></div>
         <div class="reads">
           <span><i>odo</i>${fmtMi(s.odometer)}</span>
           ${s.trailer_distance != null ? `<span><i>trailer</i>${fmtMi(s.trailer_distance)}</span>` : ''}
-          ${s.fuel_economy_mpg != null ? `<span><i>mpg</i>${s.fuel_economy_mpg}</span>` : ''}
+          ${s.fuel_economy_mpg != null ? `<span><i>mpg</i>${esc(s.fuel_economy_mpg)}</span>` : ''}
         </div>
       </div>
+      <button class="del" data-id="${Number(s.id)}" aria-label="Delete snap">✕</button>
     </div>`;
   }).join('');
 }
@@ -735,6 +745,18 @@ async function loadAll() {
 }
 
 // ── capture flow — the signature moment ──
+// EXIF capture date: a gallery pick or delayed upload must be stamped when the
+// PHOTO was taken, not when it was uploaded — otherwise out-of-order uploads
+// create negative odometer deltas and corrupt the split. Falls back to now.
+async function getExifDate(file) {
+  try {
+    const exifr = (await import('https://cdn.jsdelivr.net/npm/exifr@7/dist/full.esm.mjs')).default;
+    const x = await exifr.parse(file, ['DateTimeOriginal', 'CreateDate']);
+    const dt = x?.DateTimeOriginal || x?.CreateDate;
+    if (dt instanceof Date && !isNaN(dt)) return dt;
+  } catch (e) {}
+  return new Date();
+}
 $('miCamera').addEventListener('change', async (e) => {
   const file = e.target.files[0]; e.target.value = '';
   if (!file || !API_URL) { if (!API_URL) toast('Connect a backend first'); return; }
@@ -746,6 +768,7 @@ $('miCamera').addEventListener('change', async (e) => {
   const btn = $('miCapture'); btn.classList.add('is-reading');
   try {
     const form = new FormData(); form.append('photo', file);
+    form.append('captured_at', (await getExifDate(file)).toISOString());
     const r = await fetch(`${API_URL}/api/snap`, { method: 'POST', headers: headers(), body: form });
     const data = await r.json();
     btn.classList.remove('is-reading');
@@ -789,6 +812,19 @@ $('miPeriods').addEventListener('click', (e) => {
 
 // ── cost expand ──
 $('miCostHead').addEventListener('click', () => $('miCost').classList.toggle('open'));
+
+// ── history: delete a bad read (confirm first — this is real financial data) ──
+$('miHist').addEventListener('click', async (e) => {
+  const b = e.target.closest('button.del'); if (!b) return;
+  const id = b.dataset.id;
+  if (!confirm(`Delete snap #${id}? This rewrites your mile history.`)) return;
+  try {
+    const r = await fetch(`${API_URL}/api/snaps/${id}`, { method: 'DELETE', headers: headers() });
+    if (!r.ok) { toast('Delete failed'); return; }
+    toast('Snap deleted');
+    loadAll();
+  } catch { toast('Connection failed'); }
+});
 
 // ── floor editing ──
 function setFloor(v) {
@@ -834,7 +870,7 @@ loadAll();
 
 // Debug bridge — lets QA drive the exact production reveal code in-browser.
 // No secrets, read-only wrappers; harmless in prod (survival tool, not sensitive).
-window.__mi = { wakeCluster, paintGauge, verdictState, renderSplit, renderCost, setStatus, setFloor,
+window.__mi = { wakeCluster, paintGauge, verdictState, renderSplit, renderCost, renderHistory, setStatus, setFloor,
   get state(){ return { API_URL, PERIOD, FLOOR, LAST_SPLIT, cpm: $('miCpm').dataset.v }; } };
 </script>
 </body>
