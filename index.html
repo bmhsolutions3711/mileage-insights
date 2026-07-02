@@ -51,7 +51,6 @@
   --mi-hue-safe:140; --mi-hue-warn:45; --mi-hue-over:8;   /* green / amber / red hues */
   --mi-arc-track:color-mix(in oklch, var(--color-panel), transparent 30%);
   --mi-ring-punch:60%;   /* radial mask inner radius: ring, not disc */
-  --mi-scale-deg:270;    /* full-scale sweep = the floor */
   --settle:700ms;
 }
 /* Registered props = the browser can *tween* the conic sweep & hue.
@@ -729,7 +728,12 @@ async function loadAll() {
     renderCost(cpm);
     renderHistory(hist.snaps);
     if (ins.need_more) {
-      $('miCluster').dataset.state = 'empty';
+      const cl = $('miCluster');
+      cl.dataset.state = 'empty';
+      // Park the instrument — a previous period's swept arc glowing under '$ —'
+      // would contradict the empty state.
+      cl.style.setProperty('--cpm-angle', '0deg');
+      cl.style.setProperty('--cpm-hue', 140);
       $('miCpm').textContent = '$ —'; $('miCpm').dataset.v = 0;
       setStatus(null, FLOOR, 'idle', { label: ins.snaps >= 1 ? 'Snap again' : 'Snap to wake' });
     } else {
@@ -831,8 +835,10 @@ function setFloor(v) {
   const f = parseFloat(v); if (!f || f <= 0) return;
   FLOOR = f; localStorage.setItem('mi_floor', String(f));
   $('miFloorVal').textContent = fmt(f); $('miFloorInput').value = f.toFixed(2);
-  // repaint current gauge/verdict against the new floor (no fake wake)
-  const cur = parseFloat($('miCpm').dataset.v || 0) || null;
+  // repaint current gauge/verdict against the new floor (no fake wake).
+  // Number.isFinite, not truthiness — a legitimate $0.00 CPM must not collapse to null.
+  const shown = parseFloat($('miCpm').dataset.v);
+  const cur = Number.isFinite(shown) ? shown : null;
   if ($('miCluster').dataset.state !== 'empty' && $('miCluster').dataset.state !== 'idle') paintGauge(cur, FLOOR);
 }
 $('miFloorVal').textContent = fmt(FLOOR);
