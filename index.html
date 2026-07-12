@@ -860,7 +860,10 @@ function renderMonthCost(m) {
     <div class="lrow"><span class="k">Fixed nut${m.fixed_is_mtd ? ' (MTD share)' : ''}</span>
       <span class="v">${fmt(m.fixed_used)}<small>of ${fmt(m.fixed_total)}/mo</small></span></div>
     <div class="lrow tot"><span class="k">All-in cost</span>
-      <span class="v">${fmt((m.variable_total || 0) + (m.accruals || 0) + (m.fixed_used || 0))}<small>${m.loaded_cpm != null ? fmt(m.loaded_cpm) + '/mi' : '—'}</small></span></div>`;
+      <span class="v">${fmt((m.variable_total || 0) + (m.accruals || 0) + (m.fixed_used || 0))}<small>${m.loaded_cpm != null ? fmt(m.loaded_cpm) + '/mi' : '—'}</small></span></div>
+    <div class="lrow tot" style="border-left-color:${(m.running_net || 0) >= 0 ? 'var(--color-success)' : 'var(--color-danger)'}">
+      <span class="k">Running net vs the nut</span>
+      <span class="v" style="color:${(m.running_net || 0) >= 0 ? 'var(--color-success)' : 'var(--color-danger)'}">${fmt(m.running_net)}<small>${m.fixed_is_mtd ? 'month to date' : 'month'}</small></span></div>`;
   $('miCostRows').innerHTML = html;
   const notes = [];
   if (!COVERAGE_OK && TXN_THROUGH) notes.push(`Cost data imported through ${TXN_THROUGH} — provisional until newer statements land.`);
@@ -937,15 +940,15 @@ async function loadTripDetail(id) {
       <button data-addx="${Number(t.id)}">＋</button></div>`;
 
   const rows = [
-    ['Revenue', t.revenue, ''], ['Variable spend', -t.variable_total, ''],
+    ['Revenue', t.revenue, ''],
+    ['Trip costs', -t.variable_total, 'fuel · food · lodging · tolls'],
     ['Accruals', -t.accruals, ''],
-    ['Fixed share', t.fixed_share != null ? -t.fixed_share : null, t.miles != null ? `${fmtMi(t.miles)} mi ${t.miles_quality}` : 'no miles'],
   ];
   html += `<div class="pnl">` + rows.map(([k, v, s]) => `
     <div class="lrow2"><span>${k}${s ? ` <small style="color:var(--color-fg-subtle)">${esc(s)}</small>` : ''}</span>
       <span class="v">${v == null ? '—' : fmt(v)}</span></div>`).join('') + `
-    <div class="lrow2 net"><span>Net${t.net == null ? ' (before fixed)' : ''}</span>
-      <span class="v ${((t.net ?? t.net_variable) < 0) ? 'neg' : 'pos'}">${fmt(t.net ?? t.net_variable)}${t.net_rpm != null ? ` · ${fmt(t.net_rpm)}/mi` : ''}</span></div>
+    <div class="lrow2 net"><span>Trip net <small style="color:var(--color-fg-subtle)">before the nut${t.miles != null ? ` · ${fmtMi(t.miles)} mi ${esc(t.miles_quality)}` : ''}</small></span>
+      <span class="v ${t.net < 0 ? 'neg' : 'pos'}">${fmt(t.net)}${t.net_rpm != null ? ` · ${fmt(t.net_rpm)}/mi` : ''}</span></div>
   </div>`;
 
   html += `<div class="actions">
