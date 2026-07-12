@@ -214,6 +214,72 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
   padding:7px 9px;color:var(--color-fg);font-family:var(--font-mono);font-size:var(--text-sm)}
 .mi-note{font-size:.68rem;color:var(--color-fg-subtle);line-height:1.5;margin-top:10px}
 
+/* Loaded line under the hero number — the cost the revenue must clear */
+.mi-loaded{font-size:var(--text-xs);color:var(--color-fg-muted);font-family:var(--font-mono);letter-spacing:.02em;margin-top:2px}
+.mi-loaded b{color:var(--color-fg-dim);font-weight:700}
+
+/* ── TRIPS — month P&L, one card per physical run ───────────────────────── */
+.mi-trips h3{margin:16px 0 8px}
+.mi-trip{background:var(--color-panel);border:1px solid var(--color-border);border-radius:var(--radius-lg);margin-bottom:8px}
+.mi-trip .head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:11px 13px;cursor:pointer}
+.mi-trip .head .nm{font-size:var(--text-sm);font-weight:600;color:var(--color-fg);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mi-trip .head .nm .sugg{font-size:.62rem;color:var(--color-info);border:1px solid color-mix(in oklch,var(--color-info),transparent 60%);
+  border-radius:var(--radius-pill);padding:1px 7px;margin-left:6px;vertical-align:1px;letter-spacing:.05em}
+.mi-trip .head .dates{font-size:var(--text-xs);color:var(--color-fg-subtle);flex:0 0 auto}
+.mi-trip .stats{display:flex;justify-content:space-between;gap:8px;padding:0 13px 11px;font-family:var(--font-mono);
+  font-variant-numeric:tabular-nums;font-size:var(--text-sm)}
+.mi-trip .stats .s{display:flex;flex-direction:column;gap:1px;min-width:0}
+.mi-trip .stats .s i{font-style:normal;font-family:var(--font-sans);font-size:.62rem;color:var(--color-fg-subtle);letter-spacing:.06em;text-transform:uppercase}
+.mi-trip .stats .pos{color:var(--color-success)}
+.mi-trip .stats .neg{color:var(--color-danger)}
+.mi-trip .stats .q{color:var(--color-fg-subtle)}
+.mi-trip .body{display:grid;grid-template-rows:0fr;transition:grid-template-rows var(--duration-normal) var(--ease-out)}
+.mi-trip.open .body{grid-template-rows:1fr}
+.mi-trip .body>.inner{overflow:hidden;min-height:0;padding:0 13px}
+.mi-trip.open .body>.inner{padding-bottom:12px}
+.mi-trip .sect{font-size:.62rem;color:var(--color-fg-subtle);letter-spacing:.1em;text-transform:uppercase;font-weight:700;margin:10px 0 4px}
+.mi-trip .trow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 9px;margin-top:5px;
+  border-left:2px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-bg-soft);font-size:var(--text-xs)}
+.mi-trip .trow .k{color:var(--color-fg-muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mi-trip .trow .k small{display:block;color:var(--color-fg-subtle);font-size:.62rem}
+.mi-trip .trow .v{font-family:var(--font-mono);color:var(--color-fg-dim);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.mi-trip .trow .v.cr{color:var(--color-success)}
+.mi-trip .trow[data-conf="low"]{border-left-color:var(--color-warn)}
+.mi-trip .trow[data-src="manual"]{border-left-color:var(--color-info)}
+.mi-trip .trow button, .mi-review .trow button{background:none;border:1px solid var(--color-border-bright);color:var(--color-fg-muted);
+  border-radius:var(--radius-md);padding:4px 8px;font-size:.72rem;cursor:pointer;flex:0 0 auto}
+.mi-trip .trow button:active, .mi-review .trow button:active{color:var(--color-fg)}
+.mi-trip select, .mi-review select{background:var(--color-bg-soft);border:1px solid var(--color-border-bright);color:var(--color-fg);
+  border-radius:var(--radius-md);padding:5px 6px;font-size:.72rem;max-width:46vw}
+.mi-trip .pnl{margin-top:10px;border-top:1px dashed var(--color-border-bright);padding-top:8px}
+.mi-trip .pnl .lrow2{display:flex;justify-content:space-between;font-size:var(--text-xs);padding:2px 0;color:var(--color-fg-muted)}
+.mi-trip .pnl .lrow2 .v{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.mi-trip .pnl .lrow2.net{font-weight:700;color:var(--color-fg)}
+.mi-trip .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
+.mi-trip .actions .cta{background:var(--color-panel-2);border:1px solid var(--color-border-bright);color:var(--color-fg);
+  border-radius:var(--radius-md);padding:7px 12px;font-size:var(--text-xs);font-weight:600;cursor:pointer}
+.mi-extra-add{display:flex;gap:6px;margin-top:6px}
+.mi-extra-add input{background:var(--color-bg-soft);border:1px solid var(--color-border);border-radius:var(--radius-md);
+  padding:6px 8px;color:var(--color-fg);font-size:.78rem;min-width:0}
+.mi-extra-add input.lbl{flex:1}
+.mi-extra-add input.amt{width:76px;font-family:var(--font-mono)}
+.mi-extra-add button{background:var(--color-panel-2);border:1px solid var(--color-border-bright);color:var(--color-fg);
+  border-radius:var(--radius-md);padding:0 12px;cursor:pointer;font-size:.9rem}
+
+/* Review strip — the Rip, trip edition */
+.mi-review{border:1px solid color-mix(in oklch,var(--color-warn),transparent 66%);border-radius:var(--radius-lg);
+  background:color-mix(in oklch,var(--color-warn),transparent 94%);margin-bottom:10px}
+.mi-review .rhead{display:flex;justify-content:space-between;align-items:center;padding:10px 13px;cursor:pointer;
+  font-size:var(--text-sm);font-weight:600;color:var(--color-warn)}
+.mi-review .rbody{display:none;padding:0 13px 11px}
+.mi-review.open .rbody{display:block}
+.mi-review .trow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 9px;margin-top:5px;
+  border-left:2px solid var(--color-warn);border-radius:var(--radius-md);background:var(--color-bg-soft);font-size:var(--text-xs)}
+.mi-review .trow .k{color:var(--color-fg-muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mi-review .trow .k small{display:block;color:var(--color-fg-subtle);font-size:.62rem}
+.mi-review .trow .v{font-family:var(--font-mono);color:var(--color-fg-dim);flex:0 0 auto}
+.mi-review .rnote{font-size:.66rem;color:var(--color-fg-subtle);margin-top:8px;line-height:1.5}
+
 /* ── HISTORY — the road behind ──────────────────────────────────────────── */
 .mi-hist h3{margin:16px 0 8px}
 .mi-histlist{
@@ -326,9 +392,10 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
       <div class="mi-arc" aria-hidden="true"></div>
       <div class="mi-needle" aria-hidden="true"></div>
       <div class="mi-readout">
-        <div class="cap">Real cost / mile</div>
+        <div class="cap" id="miCap">Revenue / mile</div>
         <output id="miCpm" data-v="0">$0.00</output>
-        <div class="unit">variable · road</div>
+        <div class="unit" id="miUnit">gross · month</div>
+        <div class="mi-loaded" id="miLoaded" hidden>loaded <b>$ —</b>/mi</div>
         <div class="mi-floor" id="miFloorPill" role="button" tabindex="0">
           floor <b id="miFloorVal">$1.00</b><span class="pen">✎</span>
         </div>
@@ -341,10 +408,11 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
   </div>
 
   <div class="mi-periods" id="miPeriods">
+    <button data-p="month" class="active">Month</button>
     <button data-p="week">Week</button>
     <button data-p="30d">30d</button>
     <button data-p="90d">90d</button>
-    <button data-p="all" class="active">All</button>
+    <button data-p="all">All</button>
   </div>
 
   <!-- MILE SPLIT -->
@@ -372,6 +440,13 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
       </div>
       <div class="mi-note" id="miCostNote"></div>
     </div></div>
+  </div>
+
+  <!-- TRIPS — month P&L (month period only) -->
+  <div class="mi-trips" id="miTrips" style="display:none">
+    <h3 class="eyebrow">Trips — every run's truth</h3>
+    <div id="miReview"></div>
+    <div id="miTripList"></div>
   </div>
 
   <!-- HISTORY -->
@@ -407,8 +482,11 @@ const $ = id => document.getElementById(id);
 let API_URL   = localStorage.getItem('mi_api')   || '';
 let API_TOKEN = localStorage.getItem('mi_token') || '';
 let FLOOR     = parseFloat(localStorage.getItem('mi_floor') || '1.00') || 1.00;
-let PERIOD    = 'all';
+let PERIOD    = 'month';                                  // the leading indicator basis
+const MONTH   = new Date().toLocaleDateString('sv-SE').slice(0, 7);  // local YYYY-MM
 let LAST_SPLIT = null;
+let TRIPS = [];                                           // month trip rollups (chooser source)
+let OPEN_TRIP = null;                                     // keep a card open across reloads
 
 const LITE = (navigator.hardwareConcurrency || 8) <= 4;
 if (LITE) document.documentElement.classList.add('lite');
@@ -514,6 +592,16 @@ function verdictState(cpm, floor) {
   if (cpm <= floor * 1.1) return { state: 'warn', angle, hue: 45 };
   return { state: 'over', angle, hue: 8 };
 }
+// Revenue mode: MORE is better. Full sweep = breakeven vs loaded cost;
+// past 270° = profit spill. Safe only at/above breakeven — gold stays honest.
+function verdictRevenue(gross, loaded) {
+  if (gross == null || loaded == null) return { state: 'idle', angle: 0, hue: 140 };
+  const ratio = gross / loaded;
+  const angle = Math.min(ratio, 1.15) * 270;
+  if (ratio >= 1)   return { state: 'safe', angle, hue: 140 };
+  if (ratio >= 0.9) return { state: 'warn', angle, hue: 45 };
+  return { state: 'over', angle, hue: 8 };
+}
 
 // ── the rolling number (hero only) ──
 function rollNumber(to, ms, el = $('miCpm')) {
@@ -556,9 +644,11 @@ function setStatus(cpm, floor, state, override) {
 }
 
 // ── soft paint (cold load / period change): show current truth, gentle land ──
-function paintGauge(cpm, floor) {
+// opts.verdict overrides the cost-vs-floor math (revenue mode passes its own);
+// opts.status overrides the badge/delta (setStatus override shape).
+function paintGauge(cpm, floor, opts = {}) {
   const cl = $('miCluster');
-  const { state, angle, hue } = verdictState(cpm, floor);
+  const { state, angle, hue } = opts.verdict || verdictState(cpm, floor);
   cl.dataset.state = (cpm == null) ? 'idle' : state;
   // restore transitions (in case a prior wake stripped them)
   const arc = cl.querySelector('.mi-arc'), ndl = cl.querySelector('.mi-needle');
@@ -567,20 +657,22 @@ function paintGauge(cpm, floor) {
   cl.style.setProperty('--cpm-hue', hue);
   rollNumber(cpm == null ? 0 : cpm, cpm == null ? 0 : 600);
   if (cpm == null) $('miCpm').textContent = '$ —';
-  setStatus(cpm, floor, state);
+  if (opts.status) setStatus(null, floor, state, opts.status);
+  else setStatus(cpm, floor, state);
 }
 
 // ── THE WAKE — full ignition-slam + settle + verdict + payoff (snap resolve) ──
 let _wakeRaf = null, _needleHandler = null;
-function wakeCluster(cpm, floor) {
+function wakeCluster(cpm, floor, opts = {}) {
   const cl = $('miCluster');
   const arc = cl.querySelector('.mi-arc'), ndl = cl.querySelector('.mi-needle');
-  const { state, angle, hue } = verdictState(cpm, floor);
+  const { state, angle, hue } = opts.verdict || verdictState(cpm, floor);
+  const land = () => opts.status ? setStatus(null, floor, state, opts.status) : setStatus(cpm, floor, state);
 
   if (_wakeRaf) { cancelAnimationFrame(_wakeRaf); _wakeRaf = null; }
   if (_needleHandler) { ndl.removeEventListener('transitionend', _needleHandler); _needleHandler = null; }
 
-  if (cpm == null) { paintGauge(null, floor); return; }   // no truth to reveal
+  if (cpm == null) { paintGauge(null, floor, opts); return; }   // no truth to reveal
 
   // Reduced-motion OR hidden tab (rAF throttled) → land the truth instantly, no stuck slam.
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -591,7 +683,7 @@ function wakeCluster(cpm, floor) {
     cl.style.setProperty('--cpm-hue', hue);
     requestAnimationFrame(() => { arc.style.transition = ''; ndl.style.transition = ''; });
     rollNumber(cpm, 0);
-    setStatus(cpm, floor, state);
+    land();
     if (!reduce && state === 'safe' && COVERAGE_OK) payoff($('miCpm'));   // never celebrate provisional data
     return;
   }
@@ -616,7 +708,7 @@ function wakeCluster(cpm, floor) {
     if (e.propertyName !== 'transform') return;
     ndl.style.willChange = '';
     ndl.removeEventListener('transitionend', _needleHandler); _needleHandler = null;
-    setStatus(cpm, floor, state);
+    land();
     if (state === 'safe' && COVERAGE_OK) payoff($('miCpm'));   // never celebrate provisional data
   };
   ndl.addEventListener('transitionend', _needleHandler);
@@ -714,11 +806,298 @@ function renderHistory(snaps) {
   }).join('');
 }
 
+// ── POST/DELETE helper (assign, extras, merge, split, confirm, refresh) ──
+async function apiSend(path, body, method = 'POST') {
+  const r = await fetch(`${API_URL}${path}`, {
+    method,
+    headers: { ...headers(), ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || `${path} → ${r.status}`);
+  return d;
+}
+
+/* ══ MONTH MODE — Real Revenue per Mile + trip P&L ═══════════════════════ */
+
+// ── the month hero: gross RPM on the gauge, loaded CPM as the bar to clear ──
+function monthStatus(m, state) {
+  if (m.gross_rpm == null) return { label: m.revenue > 0 ? 'Revenue, no miles yet' : 'No miles this month', state: 'idle' };
+  const LBL = { safe: 'Making money', warn: 'Near breakeven', over: 'Losing money' };
+  let d = m.net_rpm == null ? '' :
+    (m.net_rpm < 0 ? '−' : '+') + Math.round(Math.abs(m.net_rpm) * 100) + '¢/mi net';
+  if (!COVERAGE_OK && TXN_THROUGH) d += ' · thru ' + TXN_THROUGH.slice(5);
+  return { label: LBL[state] || '', delta: d, state };
+}
+function renderMonthHero(m, wake = false) {
+  COVERAGE_OK = m.coverage_complete !== false;
+  TXN_THROUGH = m.txn_through || null;
+  const monthName = new Date(m.month + '-15T12:00:00').toLocaleDateString('en-US', { month: 'long' });
+  $('miCap').textContent = 'Revenue / mile';
+  $('miUnit').textContent = 'gross · ' + monthName + (m.fixed_is_mtd ? ' MTD' : '');
+  const lo = $('miLoaded');
+  if (m.loaded_cpm != null) {
+    lo.hidden = false; lo.innerHTML = `all-in cost <b>${fmt(m.loaded_cpm)}</b>/mi`;
+    $('miFloorPill').style.display = 'none';
+  } else { lo.hidden = true; $('miFloorPill').style.display = ''; }
+  const v = verdictRevenue(m.gross_rpm, m.loaded_cpm);
+  (wake ? wakeCluster : paintGauge)(m.gross_rpm, FLOOR, { verdict: v, status: monthStatus(m, v.state) });
+}
+
+// ── month cost card: variable + accruals + fixed = the all-in nut ──
+function renderMonthCost(m) {
+  $('miCostEyebrow').textContent = 'Loaded / mi';
+  $('miCostLine').textContent = m.loaded_cpm != null ? fmt(m.loaded_cpm) : '--';
+  const cats = Object.entries(m.variable_by_category || {}).sort((a, b) => (b[1] || 0) - (a[1] || 0));
+  let html = cats.map(([cat, cost]) => `
+    <div class="lrow"><span class="k">${esc(CAT_LABEL[cat] || cat)}</span>
+      <span class="v">${fmt(cost)}<small>${m.odo_miles > 0 ? fmt(cost / m.odo_miles) + '/mi' : ''}</small></span></div>`).join('');
+  if (m.accruals > 0) html += `
+    <div class="lrow"><span class="k">Accruals ⌛</span>
+      <span class="v">${fmt(m.accruals)}<small>HUT & friends</small></span></div>`;
+  html += `
+    <div class="lrow"><span class="k">Fixed nut${m.fixed_is_mtd ? ' (MTD share)' : ''}</span>
+      <span class="v">${fmt(m.fixed_used)}<small>of ${fmt(m.fixed_total)}/mo</small></span></div>
+    <div class="lrow tot"><span class="k">All-in cost</span>
+      <span class="v">${fmt((m.variable_total || 0) + (m.accruals || 0) + (m.fixed_used || 0))}<small>${m.loaded_cpm != null ? fmt(m.loaded_cpm) + '/mi' : '—'}</small></span></div>`;
+  $('miCostRows').innerHTML = html;
+  const notes = [];
+  if (!COVERAGE_OK && TXN_THROUGH) notes.push(`Cost data imported through ${TXN_THROUGH} — provisional until newer statements land.`);
+  if (m.unattributed_miles > 0) notes.push(`${fmtMi(m.unattributed_miles)} business mi not attributed to any trip.`);
+  $('miCostNote').textContent = notes.join(' ');
+}
+
+// ── trips list ──
+const Q_GLYPH = { measured: '●', estimated: '◐', none: '—' };
+const _md = s => { const d = new Date(s + 'T12:00:00'); return isNaN(d) ? (s || '') : (d.getMonth() + 1) + '/' + d.getDate(); };
+function renderTrips(data) {
+  TRIPS = data.trips || [];
+  const el = $('miTripList');
+  if (!TRIPS.length) { el.innerHTML = `<div class="mi-empty">No trips this month yet. Loads flow in from the Load Log.</div>`; return; }
+  el.innerHTML = TRIPS.map(t => {
+    const net = t.net;
+    return `<div class="mi-trip" data-id="${Number(t.id)}">
+      <div class="head">
+        <span class="nm">${esc(t.name || 'Trip')}${t.status === 'auto' ? '<span class="sugg">suggested</span>' : ''}</span>
+        <span class="dates">${_md(t.start_date)}–${_md(t.end_date)}${t.write_off ? ' · ⚠︎ write-off' : ''}</span>
+      </div>
+      <div class="stats">
+        <span class="s"><i>Revenue</i><span>${fmt(t.revenue)}</span></span>
+        <span class="s"><i>Net</i><span class="${net == null ? '' : net < 0 ? 'neg' : 'pos'}">${net != null ? fmt(net) : '—'}</span></span>
+        <span class="s"><i>$/mi g·n</i><span>${t.gross_rpm != null ? fmt(t.gross_rpm) : '—'}·${t.net_rpm != null ? fmt(t.net_rpm) : '—'} <span class="q" title="${esc(t.miles_quality)}">${Q_GLYPH[t.miles_quality] || ''}</span></span></span>
+      </div>
+      <div class="body"><div class="inner" data-inner="${Number(t.id)}"></div></div>
+    </div>`;
+  }).join('');
+  if (OPEN_TRIP != null) {
+    const card = el.querySelector(`.mi-trip[data-id="${OPEN_TRIP}"]`);
+    if (card) { card.classList.add('open'); loadTripDetail(OPEN_TRIP); }
+  }
+}
+
+// trip chooser <select> — used by move-txn and the review strip
+function tripOptions(selected) {
+  return `<option value="">— move to —</option>` +
+    TRIPS.map(t => `<option value="${Number(t.id)}" ${t.id === selected ? 'selected' : ''}>${esc(t.name)} ${_md(t.start_date)}</option>`).join('') +
+    `<option value="null">Unassign</option>`;
+}
+
+async function loadTripDetail(id) {
+  const inner = document.querySelector(`[data-inner="${id}"]`);
+  if (!inner) return;
+  inner.innerHTML = `<div class="mi-note">Loading…</div>`;
+  let t;
+  try { t = await api(`/api/trips/${id}`); } catch (e) { inner.innerHTML = `<div class="mi-note">Couldn't load trip.</div>`; return; }
+  const many = t.loads.length > 1;
+  let html = `<div class="sect">Loads · invoices as billed</div>` + t.loads.map(l => `
+    <div class="trow"><span class="k">#${esc(l.load_number)} → ${esc(l.delivery_city)}${l.delivery_state ? ', ' + esc(l.delivery_state) : ''}
+      <small>inv ${esc(l.invoice || '—')} · ${_md(l.pickup_date)}–${_md(l.delivery_date)}</small></span>
+      <span class="v">${fmt(l.rate)}</span>
+      ${many ? `<button data-eject="${Number(l.sheet_row)}" title="Split into its own trip">⤴</button>` : ''}
+    </div>`).join('');
+
+  html += `<div class="sect">Matched spend${t.window ? ` · window ${_md(t.window.from)}–${_md(t.window.to)}` : ''}</div>`;
+  html += t.txns.length ? t.txns.map(x => `
+    <div class="trow" data-conf="${esc(x.confidence || '')}" data-src="${esc(x.source)}">
+      <span class="k">${esc(x.merchant || x.description || '')}
+        <small>${esc(x.date)} · ${esc(CAT_LABEL[x.category] || x.category)}${x.source === 'manual' ? ' · pinned' : (x.confidence === 'low' ? ' · low conf.' : '')}</small></span>
+      <span class="v ${x.amount > 0 ? 'cr' : ''}">${fmt(Math.abs(x.amount)) }${x.amount > 0 ? ' cr' : ''}</span>
+      <button data-move="${Number(x.id)}" title="Move to another trip">⇄</button>
+    </div>`).join('')
+    : `<div class="mi-note">No matched transactions.</div>`;
+
+  html += `<div class="sect">Accruals — costs the bank won't show yet</div>`;
+  html += (t.extras || []).map(e => `
+    <div class="trow"><span class="k">⌛ ${esc(e.label)}</span><span class="v">${fmt(e.amount)}</span>
+      <button data-delx="${Number(e.id)}">✕</button></div>`).join('');
+  html += `<div class="mi-extra-add">
+      <input class="lbl" placeholder="NY HUT ~300 mi" data-xl="${Number(t.id)}">
+      <input class="amt" type="number" step="0.01" inputmode="decimal" placeholder="30.00" data-xa="${Number(t.id)}">
+      <button data-addx="${Number(t.id)}">＋</button></div>`;
+
+  const rows = [
+    ['Revenue', t.revenue, ''], ['Variable spend', -t.variable_total, ''],
+    ['Accruals', -t.accruals, ''],
+    ['Fixed share', t.fixed_share != null ? -t.fixed_share : null, t.miles != null ? `${fmtMi(t.miles)} mi ${t.miles_quality}` : 'no miles'],
+  ];
+  html += `<div class="pnl">` + rows.map(([k, v, s]) => `
+    <div class="lrow2"><span>${k}${s ? ` <small style="color:var(--color-fg-subtle)">${esc(s)}</small>` : ''}</span>
+      <span class="v">${v == null ? '—' : fmt(v)}</span></div>`).join('') + `
+    <div class="lrow2 net"><span>Net${t.net == null ? ' (before fixed)' : ''}</span>
+      <span class="v ${((t.net ?? t.net_variable) < 0) ? 'neg' : 'pos'}">${fmt(t.net ?? t.net_variable)}${t.net_rpm != null ? ` · ${fmt(t.net_rpm)}/mi` : ''}</span></div>
+  </div>`;
+
+  html += `<div class="actions">
+    ${t.status === 'auto' ? `<button class="cta" data-confirm="${Number(t.id)}">✓ Confirm trip</button>` : ''}
+    ${TRIPS.length > 1 ? `<select data-merge="${Number(t.id)}"><option value="">Merge with…</option>${
+      TRIPS.filter(x => x.id !== t.id).map(x => `<option value="${Number(x.id)}">${esc(x.name)} ${_md(x.start_date)}</option>`).join('')}</select>` : ''}
+  </div>`;
+  inner.innerHTML = html;
+}
+
+// ── review strip — the Rip, trip edition ──
+function renderReview(r) {
+  const el = $('miReview');
+  const items = [
+    ...r.unmatched.map(x => ({ ...x, kind: 'unmatched' })),
+    ...r.low_confidence.map(x => ({ ...x, kind: 'low' })),
+    ...r.taxes.map(x => ({ ...x, kind: 'tax' })),
+  ];
+  if (!items.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="mi-review" id="miReviewBox">
+    <div class="rhead"><span>Needs review</span><span>${items.length} ▾</span></div>
+    <div class="rbody">
+      ${items.map(x => `
+        <div class="trow"><span class="k">${esc(x.merchant || x.description || '')}
+          <small>${esc(x.date)} · ${esc(x.category)}${x.kind === 'low' ? ' · low-confidence match' : x.kind === 'tax' ? ' · tax — usually stays out (accruals carry it)' : ' · no trip matched'}</small></span>
+          <span class="v">${fmt(Math.abs(x.amount))}</span>
+          ${x.kind === 'low' ? `<button data-keep="${Number(x.id)}" data-trip="${Number(x.trip_id)}" title="Pin where it is">✓</button>` : ''}
+          <select data-rmove="${Number(x.id)}">${tripOptions(x.kind === 'low' ? x.trip_id : undefined)}</select>
+        </div>`).join('')}
+      <div class="rnote">✓ pins a low-confidence match where it is. Taxes rows are informational — quarterly payments cover many trips; add a per-trip accrual instead.</div>
+    </div></div>`;
+}
+
+// ── mutations ──
+async function moveTxn(txnId, tripId) {
+  try {
+    await apiSend(`/api/txns/${txnId}/assign`, { trip_id: tripId });
+    toast(tripId === null ? 'Unassigned' : 'Moved ✓');
+    await loadMonth(false);
+  } catch (e) { toast(e.message); }
+}
+async function loadMonth(wake) {
+  const [m, tr, rv] = await Promise.all([
+    api(`/api/month?month=${MONTH}`), api(`/api/trips?month=${MONTH}`), api(`/api/review`),
+  ]);
+  renderMonthHero(m, wake);
+  renderMonthCost(m);
+  renderSplit({ business_miles: m.business_miles, personal_miles: Math.max(0, (m.odo_miles || 0) - (m.business_miles || 0)) });
+  renderTrips(tr);
+  renderReview(rv);
+}
+async function refreshLoads() {
+  if (sessionStorage.getItem('mi_loads_refreshed')) return;
+  try {
+    const d = await apiSend('/api/loads/refresh');
+    sessionStorage.setItem('mi_loads_refreshed', '1');
+    if (d.trips && d.trips.new_trips > 0) toast(`${d.trips.new_trips} new trip${d.trips.new_trips > 1 ? 's' : ''} suggested`);
+  } catch (e) { /* offline from :9877 is fine — mirror renders */ }
+}
+
+// ── trips interactions (delegated) ──
+$('miTripList').addEventListener('click', async (e) => {
+  const move = e.target.closest('[data-move]');
+  if (move) {
+    const sel = document.createElement('select');
+    sel.innerHTML = tripOptions();
+    sel.addEventListener('change', () => {
+      const v = sel.value; if (!v) return;
+      moveTxn(Number(move.dataset.move), v === 'null' ? null : Number(v));
+    });
+    move.replaceWith(sel); sel.focus();
+    return;
+  }
+  const eject = e.target.closest('[data-eject]');
+  if (eject) {
+    if (!confirm('Split this load into its own trip?')) return;
+    const tid = Number(eject.closest('.mi-trip').dataset.id);
+    try { await apiSend(`/api/trips/${tid}/split`, { sheet_rows: [Number(eject.dataset.eject)] }); toast('Split ✓'); await loadMonth(false); }
+    catch (err) { toast(err.message); }
+    return;
+  }
+  const delx = e.target.closest('[data-delx]');
+  if (delx) {
+    try { await apiSend(`/api/extras/${Number(delx.dataset.delx)}`, null, 'DELETE'); toast('Accrual removed'); await loadMonth(false); }
+    catch (err) { toast(err.message); }
+    return;
+  }
+  const addx = e.target.closest('[data-addx]');
+  if (addx) {
+    const id = addx.dataset.addx;
+    const lbl = document.querySelector(`[data-xl="${id}"]`).value.trim();
+    const amt = parseFloat(document.querySelector(`[data-xa="${id}"]`).value);
+    if (!lbl || !Number.isFinite(amt)) { toast('Label + amount needed'); return; }
+    try { await apiSend(`/api/trips/${id}/extras`, { label: lbl, amount: amt }); toast('Accrual added ⌛'); await loadMonth(false); }
+    catch (err) { toast(err.message); }
+    return;
+  }
+  const conf = e.target.closest('[data-confirm]');
+  if (conf) {
+    try { await apiSend(`/api/trips/${Number(conf.dataset.confirm)}/confirm`); toast('Trip confirmed ✓'); await loadMonth(false); }
+    catch (err) { toast(err.message); }
+    return;
+  }
+  const head = e.target.closest('.mi-trip .head');
+  if (head) {
+    const card = head.closest('.mi-trip'), id = Number(card.dataset.id);
+    const opening = !card.classList.contains('open');
+    document.querySelectorAll('.mi-trip.open').forEach(c => c.classList.remove('open'));
+    if (opening) { card.classList.add('open'); OPEN_TRIP = id; loadTripDetail(id); }
+    else OPEN_TRIP = null;
+  }
+});
+$('miTripList').addEventListener('change', async (e) => {
+  const mg = e.target.closest('[data-merge]');
+  if (mg && mg.value) {
+    const a = Number(mg.dataset.merge), b = Number(mg.value);
+    if (!confirm('Merge these two trips? Their loads, spend and accruals combine.')) { mg.value = ''; return; }
+    try { const d = await apiSend('/api/trips/merge', { trip_ids: [a, b] }); OPEN_TRIP = d.kept; toast('Merged ✓'); await loadMonth(false); }
+    catch (err) { toast(err.message); }
+  }
+});
+$('miReview').addEventListener('click', (e) => {
+  const keep = e.target.closest('[data-keep]');
+  if (keep) { moveTxn(Number(keep.dataset.keep), Number(keep.dataset.trip)); return; }
+  if (e.target.closest('.rhead')) $('miReviewBox').classList.toggle('open');
+});
+$('miReview').addEventListener('change', (e) => {
+  const sel = e.target.closest('[data-rmove]');
+  if (sel && sel.value) moveTxn(Number(sel.dataset.rmove), sel.value === 'null' ? null : Number(sel.value));
+});
+
 // ── load everything for the current period ──
 let _cold = true;
 async function loadAll() {
   if (!API_URL) { $('miConfig').classList.add('show'); return; }
+  const monthMode = PERIOD === 'month';
+  $('miTrips').style.display = monthMode ? '' : 'none';
+  document.querySelector('.mi-floor-set').style.display = monthMode ? 'none' : '';
+  if (!monthMode) {   // restore the cost-mode hero chrome
+    $('miCap').textContent = 'Real cost / mile';
+    $('miUnit').textContent = 'variable · road';
+    $('miLoaded').hidden = true;
+    $('miFloorPill').style.display = '';
+  }
   try {
+    if (monthMode) {
+      await refreshLoads();
+      const hist = await api(`/api/snaps?limit=40`);
+      renderHistory(hist.snaps);
+      await loadMonth(false);
+      _cold = false;
+      return;
+    }
     const [ins, cpm, hist] = await Promise.all([
       api(`/api/insights?period=${PERIOD}`),
       api(`/api/cpm?period=${PERIOD}`),
@@ -778,18 +1157,23 @@ $('miCamera').addEventListener('change', async (e) => {
     btn.classList.remove('is-reading');
     if (!r.ok) { toast(data.error || 'Vision failed'); wall.classList.remove('show'); return; }
 
-    // fold in the fresh split, pull the CPM for the period, then WAKE
-    if (data.split) renderSplit(data.split);
+    // fold in the fresh split, pull the truth for the mode, then WAKE
+    const monthMode = PERIOD === 'month';
+    if (data.split && !monthMode) renderSplit(data.split);
     let cpmResp = null;
-    try { cpmResp = await api(`/api/cpm?period=${PERIOD}`); renderCost(cpmResp); } catch (_) {}
-    // refresh split + history for the period in the background
-    api(`/api/insights?period=${PERIOD}`).then(renderSplit).catch(() => {});
+    if (!monthMode) {
+      try { cpmResp = await api(`/api/cpm?period=${PERIOD}`); renderCost(cpmResp); } catch (_) {}
+      api(`/api/insights?period=${PERIOD}`).then(renderSplit).catch(() => {});
+    }
     api(`/api/snaps?limit=40`).then(h => renderHistory(h.snaps)).catch(() => {});
 
-    if (LAST_SPLIT && LAST_SPLIT.need_more) {
+    if (data.split && data.split.need_more) {
       $('miCluster').dataset.state = 'empty';
       setStatus(null, FLOOR, 'idle', { label: 'Baseline set — snap again' });
       toast('Baseline logged ✓');
+    } else if (monthMode) {
+      await loadMonth(true);                          // ignition slam on the month truth
+      toast('Read ✓');
     } else {
       const cpmVal = cpmResp ? cpmResp.variable_cpm : null;
       wakeCluster(cpmVal, FLOOR);
@@ -837,6 +1221,8 @@ function setFloor(v) {
   $('miFloorVal').textContent = fmt(f); $('miFloorInput').value = f.toFixed(2);
   // repaint current gauge/verdict against the new floor (no fake wake).
   // Number.isFinite, not truthiness — a legitimate $0.00 CPM must not collapse to null.
+  // Month mode compares gross vs LOADED (floor is only its null-fallback) — no repaint.
+  if (PERIOD === 'month') return;
   const shown = parseFloat($('miCpm').dataset.v);
   const cur = Number.isFinite(shown) ? shown : null;
   if ($('miCluster').dataset.state !== 'empty' && $('miCluster').dataset.state !== 'idle') paintGauge(cur, FLOOR);

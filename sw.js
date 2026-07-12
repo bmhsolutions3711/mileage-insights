@@ -1,5 +1,5 @@
 /* BIK PWA service worker — canonical template. Bump CACHE on every shell change. */
-const CACHE = 'mileage-insights-v6';
+const CACHE = 'mileage-insights-v7';
 const SHELL = [
   '/mileage-insights/',
   '/mileage-insights/index.html',
