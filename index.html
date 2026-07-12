@@ -240,14 +240,15 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 .mi-trip .sect{font-size:.62rem;color:var(--color-fg-subtle);letter-spacing:.1em;text-transform:uppercase;font-weight:700;margin:10px 0 4px}
 .mi-trip .trow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 9px;margin-top:5px;
   border-left:2px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-bg-soft);font-size:var(--text-xs)}
-.mi-trip .trow .k{color:var(--color-fg-muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mi-trip .trow .k{color:var(--color-fg-muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .mi-trip .trow .k small{display:block;color:var(--color-fg-subtle);font-size:.62rem}
+.mi-trip .trow .k b, .mi-review .trow .k b{font-family:var(--font-mono);color:var(--color-fg-dim);font-weight:600;font-size:.72rem;font-variant-numeric:tabular-nums}
 .mi-trip .trow .v{font-family:var(--font-mono);color:var(--color-fg-dim);font-variant-numeric:tabular-nums;flex:0 0 auto}
 .mi-trip .trow .v.cr{color:var(--color-success)}
 .mi-trip .trow[data-conf="low"]{border-left-color:var(--color-warn)}
 .mi-trip .trow[data-src="manual"]{border-left-color:var(--color-info)}
-.mi-trip .trow button, .mi-review .trow button{background:none;border:1px solid var(--color-border-bright);color:var(--color-fg-muted);
-  border-radius:var(--radius-md);padding:4px 8px;font-size:.72rem;cursor:pointer;flex:0 0 auto}
+.mi-trip .trow button, .mi-review .trow button{background:none;border:1px solid var(--color-border);color:var(--color-fg-subtle);
+  border-radius:var(--radius-md);padding:2px 6px;font-size:.62rem;cursor:pointer;flex:0 0 auto;line-height:1.4}
 .mi-trip .trow button:active, .mi-review .trow button:active{color:var(--color-fg)}
 .mi-trip select, .mi-review select{background:var(--color-bg-soft);border:1px solid var(--color-border-bright);color:var(--color-fg);
   border-radius:var(--radius-md);padding:5px 6px;font-size:.72rem;max-width:46vw}
@@ -275,7 +276,7 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 .mi-review.open .rbody{display:block}
 .mi-review .trow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 9px;margin-top:5px;
   border-left:2px solid var(--color-warn);border-radius:var(--radius-md);background:var(--color-bg-soft);font-size:var(--text-xs)}
-.mi-review .trow .k{color:var(--color-fg-muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mi-review .trow .k{color:var(--color-fg-muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .mi-review .trow .k small{display:block;color:var(--color-fg-subtle);font-size:.62rem}
 .mi-review .trow .v{font-family:var(--font-mono);color:var(--color-fg-dim);flex:0 0 auto}
 .mi-review .rnote{font-size:.66rem;color:var(--color-fg-subtle);margin-top:8px;line-height:1.5}
@@ -919,8 +920,8 @@ async function loadTripDetail(id) {
   html += `<div class="sect">Matched spend${t.window ? ` · window ${_md(t.window.from)}–${_md(t.window.to)}` : ''}</div>`;
   html += t.txns.length ? t.txns.map(x => `
     <div class="trow" data-conf="${esc(x.confidence || '')}" data-src="${esc(x.source)}">
-      <span class="k">${esc(x.merchant || x.description || '')}
-        <small>${esc(x.date)} · ${esc(CAT_LABEL[x.category] || x.category)}${x.source === 'manual' ? ' · pinned' : (x.confidence === 'low' ? ' · low conf.' : '')}</small></span>
+      <span class="k"><b>${_md(x.date)}</b> ${esc(x.merchant || x.description || '')}
+        <small>${esc(CAT_LABEL[x.category] || x.category)}${x.source === 'manual' ? ' · pinned' : (x.confidence === 'low' ? ' · low conf.' : '')}</small></span>
       <span class="v ${x.amount > 0 ? 'cr' : ''}">${fmt(Math.abs(x.amount)) }${x.amount > 0 ? ' cr' : ''}</span>
       <button data-move="${Number(x.id)}" title="Move to another trip">⇄</button>
     </div>`).join('')
@@ -968,8 +969,8 @@ function renderReview(r) {
     <div class="rhead"><span>Needs review</span><span>${items.length} ▾</span></div>
     <div class="rbody">
       ${items.map(x => `
-        <div class="trow"><span class="k">${esc(x.merchant || x.description || '')}
-          <small>${esc(x.date)} · ${esc(x.category)}${x.kind === 'low' ? ' · low-confidence match' : x.kind === 'tax' ? ' · tax — usually stays out (accruals carry it)' : ' · no trip matched'}</small></span>
+        <div class="trow"><span class="k"><b>${_md(x.date)}</b> ${esc(x.merchant || x.description || '')}
+          <small>${esc(x.category)}${x.kind === 'low' ? ' · low-conf match' : x.kind === 'tax' ? ' · tax — accruals carry it' : ' · no trip matched'}</small></span>
           <span class="v">${fmt(Math.abs(x.amount))}</span>
           ${x.kind === 'low' ? `<button data-keep="${Number(x.id)}" data-trip="${Number(x.trip_id)}" title="Pin where it is">✓</button>` : ''}
           <select data-rmove="${Number(x.id)}">${tripOptions(x.kind === 'low' ? x.trip_id : undefined)}</select>
