@@ -224,6 +224,19 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 .mi-cost .lrow.tot{border-left-color:var(--color-border-bright);margin-top:10px;background:var(--color-panel-2)}
 .mi-cost .lrow.tot .k{color:var(--color-fg)}
 .mi-cost .lrow.tot .v{color:var(--color-fg)}
+/* ── Inline category history — tap an expense row, 6-month bars unfold ──── */
+.mi-cost .lrow[data-cat]{cursor:pointer}
+.mi-cost .lrow[data-cat] .k::after{content:"▾";margin-left:6px;font-size:.6rem;color:var(--color-fg-subtle);opacity:.7}
+.mi-cost .lrow[data-cat].charted .k::after{content:"▴"}
+.mi-bars{display:flex;align-items:flex-end;gap:2px;height:88px;padding:10px 10px 6px;margin-top:4px;
+  background:var(--color-bg-soft);border-radius:var(--radius-md);border-left:2px solid var(--color-border)}
+.mi-bars .col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;min-width:0}
+.mi-bars .bar{width:70%;max-width:26px;border-radius:4px 4px 0 0;background:color-mix(in oklch, var(--color-primary), var(--color-panel) 55%);min-height:2px}
+.mi-bars .col.now .bar{background:var(--color-primary)}
+.mi-bars .col .m{font-size:.56rem;color:var(--color-fg-subtle);letter-spacing:.02em}
+.mi-bars .col .val{font-family:var(--font-mono);font-size:.56rem;color:var(--color-fg-dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+.mi-bars .col.zero .val{color:var(--color-fg-subtle)}
+
 .mi-floor-set{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:var(--text-xs);color:var(--color-fg-subtle)}
 .mi-floor-set input{width:88px;background:var(--color-bg-soft);border:1px solid var(--color-border);border-radius:var(--radius-md);
   padding:7px 9px;color:var(--color-fg);font-family:var(--font-mono);font-size:var(--text-sm)}
@@ -399,7 +412,7 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 <div class="wrap">
   <header>
     <h1>Mileage Insights</h1>
-    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v13</span></div>
+    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v14</span></div>
   </header>
 
   <!-- THE CLUSTER — hero -->
@@ -883,15 +896,15 @@ function renderMonthCost(m) {
 
   const monthName = new Date(m.month + '-15T12:00:00').toLocaleDateString('en-US', { month: 'long' });
   const cats = Object.entries(m.variable_by_category || {}).sort((a, b) => (b[1] || 0) - (a[1] || 0));
-  let html = `<div class="mi-note" style="margin:6px 0 2px;font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--color-fg-subtle)">Expense Breakdown — ${esc(monthName)}</div>`;
+  let html = `<div class="mi-note" style="margin:6px 0 2px;font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--color-fg-subtle)">Expense Breakdown — ${esc(monthName)} · tap a line for its 6-month story</div>`;
   html += cats.map(([cat, cost]) => `
-    <div class="lrow"><span class="k">${esc(CAT_LABEL[cat] || cat)}</span>
+    <div class="lrow" data-cat="${esc(cat)}"><span class="k">${esc(CAT_LABEL[cat] || cat)}</span>
       <span class="v">${fmt(cost)}<small>${m.odo_miles > 0 ? fmt(cost / m.odo_miles) + '/mi' : ''}</small></span></div>`).join('');
   if (m.accruals > 0) html += `
     <div class="lrow"><span class="k">Accruals ⌛</span>
       <span class="v">${fmt(m.accruals)}<small>HUT & friends</small></span></div>`;
   html += `
-    <div class="lrow"><span class="k">Fixed nut${m.fixed_is_mtd ? ' (MTD share)' : ''}
+    <div class="lrow" data-cat="Truck Maintenance,Truck Supplies"><span class="k">Fixed nut${m.fixed_is_mtd ? ' (MTD share)' : ''}
       ${m.fixed_parts && m.fixed_parts.maint_reserve > 0 ? `<small>incl. maint reserve ${fmt(m.fixed_parts.maint_reserve)}/mo (YTD ÷ 12)</small>` : ''}</span>
       <span class="v">${fmt(m.fixed_used)}<small>of ${fmt(m.fixed_total)}/mo</small></span></div>
     <div class="lrow tot"><span class="k">All-in cost</span>
@@ -1244,6 +1257,41 @@ $('miPeriods').addEventListener('click', (e) => {
 
 // ── cost expand ──
 $('miCostHead').addEventListener('click', () => $('miCost').classList.toggle('open'));
+
+// ── tap an expense row → 6-month bar history unfolds beneath it ──
+const _histCache = new Map();
+const fmtK = n => n >= 1000 ? '$' + (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+                            : '$' + Math.round(n);
+$('miCostRows').addEventListener('click', async (e) => {
+  const row = e.target.closest('.lrow[data-cat]'); if (!row) return;
+  const existing = row.nextElementSibling;
+  if (existing && existing.classList.contains('mi-bars')) {   // toggle closed
+    existing.remove(); row.classList.remove('charted'); return;
+  }
+  document.querySelectorAll('#miCostRows .mi-bars').forEach(el => el.remove());
+  document.querySelectorAll('#miCostRows .lrow.charted').forEach(el => el.classList.remove('charted'));
+  const cat = row.dataset.cat;
+  let hist = _histCache.get(cat);
+  if (!hist) {
+    try { hist = (await api(`/api/category-history?cat=${encodeURIComponent(cat)}&months=6`)).history; }
+    catch (err) { toast('History unavailable'); return; }
+    _histCache.set(cat, hist);
+  }
+  const max = Math.max(...hist.map(h => h.total), 1);
+  const nowYm = MONTH;
+  const wrap = document.createElement('div');
+  wrap.className = 'mi-bars';
+  wrap.innerHTML = hist.map(h => {
+    const mon = new Date(h.month + '-15T12:00:00').toLocaleDateString('en-US', { month: 'short' });
+    return `<div class="col ${h.month === nowYm ? 'now' : ''} ${h.total === 0 ? 'zero' : ''}">
+      <span class="val">${h.total > 0 ? fmtK(h.total) : '—'}</span>
+      <span class="bar" style="height:${Math.max(2, Math.round(h.total / max * 52))}px"></span>
+      <span class="m">${esc(mon)}</span>
+    </div>`;
+  }).join('');
+  row.after(wrap);
+  row.classList.add('charted');
+});
 
 // ── history: delete a bad read (confirm first — this is real financial data) ──
 $('miHist').addEventListener('click', async (e) => {
