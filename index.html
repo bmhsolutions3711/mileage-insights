@@ -399,7 +399,7 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 <div class="wrap">
   <header>
     <h1>Mileage Insights</h1>
-    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v12</span></div>
+    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v13</span></div>
   </header>
 
   <!-- THE CLUSTER — hero -->
@@ -891,7 +891,8 @@ function renderMonthCost(m) {
     <div class="lrow"><span class="k">Accruals ⌛</span>
       <span class="v">${fmt(m.accruals)}<small>HUT & friends</small></span></div>`;
   html += `
-    <div class="lrow"><span class="k">Fixed nut${m.fixed_is_mtd ? ' (MTD share)' : ''}</span>
+    <div class="lrow"><span class="k">Fixed nut${m.fixed_is_mtd ? ' (MTD share)' : ''}
+      ${m.fixed_parts && m.fixed_parts.maint_reserve > 0 ? `<small>incl. maint reserve ${fmt(m.fixed_parts.maint_reserve)}/mo (YTD ÷ 12)</small>` : ''}</span>
       <span class="v">${fmt(m.fixed_used)}<small>of ${fmt(m.fixed_total)}/mo</small></span></div>
     <div class="lrow tot"><span class="k">All-in cost</span>
       <span class="v">${fmt((m.variable_total || 0) + (m.accruals || 0) + (m.fixed_used || 0))}<small>${m.loaded_cpm != null ? fmt(m.loaded_cpm) + '/mi' : '—'}</small></span></div>`;
