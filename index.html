@@ -389,7 +389,7 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 <div class="wrap">
   <header>
     <h1>Mileage Insights</h1>
-    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v10</span></div>
+    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v11</span></div>
   </header>
 
   <!-- THE CLUSTER — hero -->
@@ -981,7 +981,7 @@ function renderReview(r) {
           <small>${esc(x.category)}${x.kind === 'low' ? ' · low-conf match' : x.kind === 'tax' ? ' · tax — accruals carry it' : ' · no trip matched'}</small></span>
           <span class="v">${fmt(Math.abs(x.amount))}</span>
           ${x.kind === 'low' ? `<button data-keep="${Number(x.id)}" data-trip="${Number(x.trip_id)}" title="Pin where it is">✓</button>` : ''}
-          <select data-rmove="${Number(x.id)}">${tripOptions(x.kind === 'low' ? x.trip_id : undefined)}</select>
+          <button data-rmove-btn="${Number(x.id)}" data-cur="${x.kind === 'low' ? Number(x.trip_id) : ''}" title="Assign to a trip">⇄</button>
         </div>`).join('')}
       <div class="rnote">✓ pins a low-confidence match where it is. Taxes rows are informational — quarterly payments cover many trips; add a per-trip accrual instead.</div>
     </div></div>`;
@@ -1078,11 +1078,18 @@ $('miTripList').addEventListener('change', async (e) => {
 $('miReview').addEventListener('click', (e) => {
   const keep = e.target.closest('[data-keep]');
   if (keep) { moveTxn(Number(keep.dataset.keep), Number(keep.dataset.trip)); return; }
+  const mv = e.target.closest('[data-rmove-btn]');
+  if (mv) {   // dropdown appears only on demand — 58 always-on selects read as chaos
+    const sel = document.createElement('select');
+    sel.innerHTML = tripOptions(mv.dataset.cur ? Number(mv.dataset.cur) : undefined);
+    sel.addEventListener('change', () => {
+      const v = sel.value; if (!v) return;
+      moveTxn(Number(mv.dataset.rmoveBtn), v === 'null' ? null : Number(v));
+    });
+    mv.replaceWith(sel); sel.focus();
+    return;
+  }
   if (e.target.closest('.rhead')) $('miReviewBox').classList.toggle('open');
-});
-$('miReview').addEventListener('change', (e) => {
-  const sel = e.target.closest('[data-rmove]');
-  if (sel && sel.value) moveTxn(Number(sel.dataset.rmove), sel.value === 'null' ? null : Number(sel.value));
 });
 
 // ── load everything for the current period ──
