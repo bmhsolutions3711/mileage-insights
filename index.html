@@ -196,6 +196,16 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 .mi-split .foot .g{background:color-mix(in oklch, var(--color-primary), #000 8%)}
 .mi-split .foot .c{background:var(--color-elevated)}
 
+/* ── RUNNING NET — one number, big, colored by its sign ─────────────────── */
+.mi-runnet .rn-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.mi-runnet .lbl{font-size:var(--text-sm);color:var(--color-fg-dim);font-weight:600}
+.mi-runnet .amt{font-family:var(--font-mono);font-weight:700;font-size:var(--text-lg);font-variant-numeric:tabular-nums}
+.mi-runnet[data-sign="pos"] .amt{color:var(--color-success)}
+.mi-runnet[data-sign="neg"] .amt{color:var(--color-danger)}
+.mi-runnet[data-sign="pos"]{border-left:2px solid var(--color-success)}
+.mi-runnet[data-sign="neg"]{border-left:2px solid var(--color-danger)}
+.mi-runnet .rn-sub{font-size:.66rem;color:var(--color-fg-subtle);margin-top:3px}
+
 /* ── COST BREAKDOWN — collapsed ledger, tap to open ─────────────────────── */
 .mi-cost .head{display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:10px}
 .mi-cost .head .line{font-size:var(--text-sm);color:var(--color-fg-dim)}
@@ -389,7 +399,7 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 <div class="wrap">
   <header>
     <h1>Mileage Insights</h1>
-    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v11</span></div>
+    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v12</span></div>
   </header>
 
   <!-- THE CLUSTER — hero -->
@@ -419,6 +429,15 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
     <button data-p="30d">30d</button>
     <button data-p="90d">90d</button>
     <button data-p="all">All</button>
+  </div>
+
+  <!-- RUNNING NET — the fight against the nut, always in reach (month mode) -->
+  <div class="mi-card mi-runnet" id="miRunNet" style="display:none">
+    <div class="rn-row">
+      <span class="lbl">Running net vs the nut</span>
+      <span class="amt" id="miRunNetVal">--</span>
+    </div>
+    <div class="rn-sub" id="miRunNetSub">month to date · after ALL costs</div>
   </div>
 
   <!-- MILE SPLIT -->
@@ -854,8 +873,18 @@ function renderMonthHero(m, wake = false) {
 function renderMonthCost(m) {
   $('miCostEyebrow').textContent = 'Loaded / mi';
   $('miCostLine').textContent = m.loaded_cpm != null ? fmt(m.loaded_cpm) : '--';
+
+  // Running net — its own card up top, always in reach.
+  const rn = $('miRunNet');
+  rn.style.display = '';
+  rn.dataset.sign = (m.running_net || 0) >= 0 ? 'pos' : 'neg';
+  $('miRunNetVal').textContent = (m.running_net >= 0 ? '+' : '−') + fmt(Math.abs(m.running_net));
+  $('miRunNetSub').textContent = (m.fixed_is_mtd ? 'month to date' : 'month') + ' · revenue − trip costs − maintenance − the nut';
+
+  const monthName = new Date(m.month + '-15T12:00:00').toLocaleDateString('en-US', { month: 'long' });
   const cats = Object.entries(m.variable_by_category || {}).sort((a, b) => (b[1] || 0) - (a[1] || 0));
-  let html = cats.map(([cat, cost]) => `
+  let html = `<div class="mi-note" style="margin:6px 0 2px;font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--color-fg-subtle)">Expense Breakdown — ${esc(monthName)}</div>`;
+  html += cats.map(([cat, cost]) => `
     <div class="lrow"><span class="k">${esc(CAT_LABEL[cat] || cat)}</span>
       <span class="v">${fmt(cost)}<small>${m.odo_miles > 0 ? fmt(cost / m.odo_miles) + '/mi' : ''}</small></span></div>`).join('');
   if (m.accruals > 0) html += `
@@ -865,10 +894,7 @@ function renderMonthCost(m) {
     <div class="lrow"><span class="k">Fixed nut${m.fixed_is_mtd ? ' (MTD share)' : ''}</span>
       <span class="v">${fmt(m.fixed_used)}<small>of ${fmt(m.fixed_total)}/mo</small></span></div>
     <div class="lrow tot"><span class="k">All-in cost</span>
-      <span class="v">${fmt((m.variable_total || 0) + (m.accruals || 0) + (m.fixed_used || 0))}<small>${m.loaded_cpm != null ? fmt(m.loaded_cpm) + '/mi' : '—'}</small></span></div>
-    <div class="lrow tot" style="border-left-color:${(m.running_net || 0) >= 0 ? 'var(--color-success)' : 'var(--color-danger)'}">
-      <span class="k">Running net vs the nut</span>
-      <span class="v" style="color:${(m.running_net || 0) >= 0 ? 'var(--color-success)' : 'var(--color-danger)'}">${fmt(m.running_net)}<small>${m.fixed_is_mtd ? 'month to date' : 'month'}</small></span></div>`;
+      <span class="v">${fmt((m.variable_total || 0) + (m.accruals || 0) + (m.fixed_used || 0))}<small>${m.loaded_cpm != null ? fmt(m.loaded_cpm) + '/mi' : '—'}</small></span></div>`;
   $('miCostRows').innerHTML = html;
   const notes = [];
   if (!COVERAGE_OK && TXN_THROUGH) notes.push(`Cost data imported through ${TXN_THROUGH} — provisional until newer statements land.`);
@@ -1104,6 +1130,7 @@ async function loadAll() {
     $('miUnit').textContent = 'variable · road';
     $('miLoaded').hidden = true;
     $('miFloorPill').style.display = '';
+    $('miRunNet').style.display = 'none';
   }
   try {
     if (monthMode) {
