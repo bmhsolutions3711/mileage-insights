@@ -178,6 +178,11 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
   color:var(--color-fg-muted);border-radius:var(--radius-pill);padding:6px 14px;
   font-size:var(--text-xs);font-weight:600;cursor:pointer;transition:border-color var(--duration-fast),color var(--duration-fast)}
 .mi-periods button.active{border-color:var(--color-border-bright);color:var(--color-fg)}
+/* Month stepper — ‹ › flank the Month chip (month mode only). A stepped-back
+   chip goes gold-tinted so "you are looking at the past" is impossible to miss. */
+.mi-periods .mi-mnav{padding:6px 10px;font-family:var(--font-mono);line-height:1}
+.mi-periods .mi-mnav[disabled]{opacity:.3;cursor:default}
+.mi-periods button.past{border-color:color-mix(in oklch,var(--color-primary),transparent 55%);color:var(--color-primary)}
 
 /* ── MILE SPLIT — quiet chrome, under the verdict ───────────────────────── */
 .mi-card{background:var(--color-panel);border:1px solid var(--color-border);border-radius:var(--radius-lg);
@@ -412,7 +417,7 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 <div class="wrap">
   <header>
     <h1>Mileage Insights</h1>
-    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v14</span></div>
+    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v16</span></div>
   </header>
 
   <!-- THE CLUSTER — hero -->
@@ -437,7 +442,9 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
   </div>
 
   <div class="mi-periods" id="miPeriods">
-    <button data-p="month" class="active">Month</button>
+    <button class="mi-mnav" id="miMPrev" data-nav="-1" aria-label="Previous month">‹</button>
+    <button data-p="month" class="active" id="miMonthChip">Month</button>
+    <button class="mi-mnav" id="miMNext" data-nav="1" aria-label="Next month">›</button>
     <button data-p="week">Week</button>
     <button data-p="30d">30d</button>
     <button data-p="90d">90d</button>
@@ -459,7 +466,7 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
     <div class="mi-splitbar"><div class="fill" id="miSplitFill"></div></div>
     <div class="foot">
       <span><span class="dot g"></span><span id="miBizPct">--</span> business</span>
-      <span><span class="dot c"></span><span id="miPer">--</span> personal</span>
+      <span><span class="dot c"></span><span id="miPer">--</span> personal<span id="miPerSpend"></span></span>
     </div>
   </div>
 
@@ -521,7 +528,9 @@ let API_URL   = localStorage.getItem('mi_api')   || '';
 let API_TOKEN = localStorage.getItem('mi_token') || '';
 let FLOOR     = parseFloat(localStorage.getItem('mi_floor') || '1.00') || 1.00;
 let PERIOD    = 'month';                                  // the leading indicator basis
-const MONTH   = new Date().toLocaleDateString('sv-SE').slice(0, 7);  // local YYYY-MM
+const CUR_MONTH = new Date().toLocaleDateString('sv-SE').slice(0, 7);  // local YYYY-MM
+const MONTH_FLOOR = '2026-07';                            // = server PNL_START month (forward-only line)
+let MONTH     = CUR_MONTH;                                // viewed month — steppable, defaults to now (#567)
 let LAST_SPLIT = null;
 let TRIPS = [];                                           // month trip rollups (chooser source)
 let OPEN_TRIP = null;                                     // keep a card open across reloads
@@ -903,12 +912,15 @@ function renderMonthCost(m) {
   if (m.accruals > 0) html += `
     <div class="lrow"><span class="k">Accruals ⌛</span>
       <span class="v">${fmt(m.accruals)}<small>HUT & friends</small></span></div>`;
+  if (m.factoring_fees > 0) html += `
+    <div class="lrow"><span class="k">Factoring fees</span>
+      <span class="v">${fmt(m.factoring_fees)}<small>rate − deposit</small></span></div>`;
   html += `
     <div class="lrow" data-cat="Truck Maintenance,Truck Supplies"><span class="k">Fixed nut${m.fixed_is_mtd ? ' (MTD share)' : ''}
       ${m.fixed_parts && m.fixed_parts.maint_reserve > 0 ? `<small>incl. maint reserve ${fmt(m.fixed_parts.maint_reserve)}/mo (YTD ÷ 12)</small>` : ''}</span>
       <span class="v">${fmt(m.fixed_used)}<small>of ${fmt(m.fixed_total)}/mo</small></span></div>
     <div class="lrow tot"><span class="k">All-in cost</span>
-      <span class="v">${fmt((m.variable_total || 0) + (m.accruals || 0) + (m.fixed_used || 0))}<small>${m.loaded_cpm != null ? fmt(m.loaded_cpm) + '/mi' : '—'}</small></span></div>`;
+      <span class="v">${fmt((m.variable_total || 0) + (m.accruals || 0) + (m.factoring_fees || 0) + (m.fixed_used || 0))}<small>${m.loaded_cpm != null ? fmt(m.loaded_cpm) + '/mi' : '—'}</small></span></div>`;
   $('miCostRows').innerHTML = html;
   const notes = [];
   if (!COVERAGE_OK && TXN_THROUGH) notes.push(`Cost data imported through ${TXN_THROUGH} — provisional until newer statements land.`);
@@ -918,16 +930,18 @@ function renderMonthCost(m) {
 
 // ── trips list ──
 const Q_GLYPH = { measured: '●', estimated: '◐', none: '—' };
-const _md = s => { const d = new Date(s + 'T12:00:00'); return isNaN(d) ? (s || '') : (d.getMonth() + 1) + '/' + d.getDate(); };
+const _md = s => { const d = new Date(s + 'T12:00:00'); return isNaN(d) ? esc(s || '') : (d.getMonth() + 1) + '/' + d.getDate(); };
+let PERSONAL = { count: 0, total: 0, by_category: {}, txns: [] };
 function renderTrips(data) {
   TRIPS = data.trips || [];
+  PERSONAL = data.personal || { count: 0, total: 0, by_category: {}, txns: [] };
   const el = $('miTripList');
-  if (!TRIPS.length) { el.innerHTML = `<div class="mi-empty">No trips this month yet. Loads flow in from the Load Log.</div>`; return; }
+  if (!TRIPS.length && !PERSONAL.count) { el.innerHTML = `<div class="mi-empty">No trips this month yet. Loads flow in from the Load Log.</div>`; return; }
   el.innerHTML = TRIPS.map(t => {
     const net = t.net;
     return `<div class="mi-trip" data-id="${Number(t.id)}">
       <div class="head">
-        <span class="nm">${esc(t.name || 'Trip')}${t.status === 'auto' ? '<span class="sugg">suggested</span>' : ''}</span>
+        <span class="nm">${esc(t.name || 'Trip')}${t.name_source === 'manual' ? ' <span style="opacity:.45;font-size:.7em">✎</span>' : ''}${t.status === 'auto' ? '<span class="sugg">suggested</span>' : ''}</span>
         <span class="dates">${_md(t.start_date)}–${_md(t.end_date)}${t.write_off ? ' · ⚠︎ write-off' : ''}</span>
       </div>
       <div class="stats">
@@ -937,10 +951,13 @@ function renderTrips(data) {
       </div>
       <div class="body"><div class="inner" data-inner="${Number(t.id)}"></div></div>
     </div>`;
-  }).join('');
+  }).join('') + personalCardHtml();
   if (OPEN_TRIP != null) {
     const card = el.querySelector(`.mi-trip[data-id="${OPEN_TRIP}"]`);
-    if (card) { card.classList.add('open'); loadTripDetail(OPEN_TRIP); }
+    if (card) {
+      card.classList.add('open');
+      OPEN_TRIP === 'personal' ? renderPersonalDetail() : loadTripDetail(OPEN_TRIP);
+    }
   }
 }
 
@@ -948,7 +965,37 @@ function renderTrips(data) {
 function tripOptions(selected) {
   return `<option value="">— move to —</option>` +
     TRIPS.map(t => `<option value="${Number(t.id)}" ${t.id === selected ? 'selected' : ''}>${esc(t.name)} ${_md(t.start_date)}</option>`).join('') +
+    `<option value="personal">Personal (kept out of P&L)</option>` +
     `<option value="null">Unassign</option>`;
+}
+
+// Personal bucket (#579) — pinned txns the business math never sees.
+function personalCardHtml() {
+  const p = PERSONAL;
+  if (!p.count) return '';
+  return `<div class="mi-trip mi-personal" data-id="personal">
+    <div class="head">
+      <span class="nm">Personal <span class="sugg">kept out of P&L</span></span>
+      <span class="dates">${Number(p.count)} txn${p.count > 1 ? 's' : ''}</span>
+    </div>
+    <div class="stats">
+      <span class="s"><i>Spend</i><span>${fmt(p.total)}</span></span>
+      <span class="s"><i>Excluded from</i><span>nut · CPM · trips</span></span>
+    </div>
+    <div class="body"><div class="inner" data-inner="personal"></div></div>
+  </div>`;
+}
+function renderPersonalDetail() {
+  const inner = document.querySelector('[data-inner="personal"]');
+  if (!inner) return;
+  inner.innerHTML = `<div class="sect">Personal spend — invisible to the business math</div>` +
+    PERSONAL.txns.map(x => `
+    <div class="trow" data-src="manual">
+      <span class="k"><b>${_md(x.date)}</b> ${esc(x.merchant || x.description || '')}
+        <small>${esc(CAT_LABEL[x.category] || x.category)} · personal</small></span>
+      <span class="v ${x.amount > 0 ? 'cr' : ''}">${fmt(Math.abs(x.amount))}${x.amount > 0 ? ' cr' : ''}</span>
+      <button data-move="${Number(x.id)}" title="Move back to a trip">⇄</button>
+    </div>`).join('');
 }
 
 async function loadTripDetail(id) {
@@ -989,6 +1036,9 @@ async function loadTripDetail(id) {
     ['Trip costs', -t.variable_total, 'fuel · food · lodging · tolls'],
     ['Accruals', -t.accruals, ''],
   ];
+  if (t.factoring_fees > 0 || t.fees_pending > 0)   // #568 — never a fabricated %; '—' until a deposit matches
+    rows.push(['Factoring fees', t.factoring_fees > 0 ? -t.factoring_fees : null,
+      t.fees_pending > 0 ? `pending on ${t.fees_pending} load${t.fees_pending > 1 ? 's' : ''}` : 'rate − deposit']);
   html += `<div class="pnl">` + rows.map(([k, v, s]) => `
     <div class="lrow2"><span>${k}${s ? ` <small style="color:var(--color-fg-subtle)">${esc(s)}</small>` : ''}</span>
       <span class="v">${v == null ? '—' : fmt(v)}</span></div>`).join('') + `
@@ -998,6 +1048,7 @@ async function loadTripDetail(id) {
 
   html += `<div class="actions">
     ${t.status === 'auto' ? `<button class="cta" data-confirm="${Number(t.id)}">✓ Confirm trip</button>` : ''}
+    <button class="cta" data-rename="${Number(t.id)}">✎ Rename</button>
     ${TRIPS.length > 1 ? `<select data-merge="${Number(t.id)}"><option value="">Merge with…</option>${
       TRIPS.filter(x => x.id !== t.id).map(x => `<option value="${Number(x.id)}">${esc(x.name)} ${_md(x.start_date)}</option>`).join('')}</select>` : ''}
   </div>`;
@@ -1011,6 +1062,7 @@ function renderReview(r) {
     ...r.unmatched.map(x => ({ ...x, kind: 'unmatched' })),
     ...r.low_confidence.map(x => ({ ...x, kind: 'low' })),
     ...r.taxes.map(x => ({ ...x, kind: 'tax' })),
+    ...(r.deposits || []).map(x => ({ ...x, kind: 'deposit' })),
   ];
   if (!items.length) { el.innerHTML = ''; return; }
   el.innerHTML = `<div class="mi-review" id="miReviewBox">
@@ -1018,10 +1070,10 @@ function renderReview(r) {
     <div class="rbody">
       ${items.map(x => `
         <div class="trow"><span class="k"><b>${_md(x.date)}</b> ${esc(x.merchant || x.description || '')}
-          <small>${esc(x.category)}${x.kind === 'low' ? ' · low-conf match' : x.kind === 'tax' ? ' · tax — accruals carry it' : ' · no trip matched'}</small></span>
+          <small>${esc(x.category)}${x.kind === 'low' ? ' · low-conf match' : x.kind === 'tax' ? ' · tax — accruals carry it' : x.kind === 'deposit' ? " · deposit names a load I can't place" : ' · no trip matched'}</small></span>
           <span class="v">${fmt(Math.abs(x.amount))}</span>
           ${x.kind === 'low' ? `<button data-keep="${Number(x.id)}" data-trip="${Number(x.trip_id)}" title="Pin where it is">✓</button>` : ''}
-          <button data-rmove-btn="${Number(x.id)}" data-cur="${x.kind === 'low' ? Number(x.trip_id) : ''}" title="Assign to a trip">⇄</button>
+          ${x.kind !== 'deposit' ? `<button data-rmove-btn="${Number(x.id)}" data-cur="${x.kind === 'low' ? Number(x.trip_id) : ''}" title="Assign to a trip">⇄</button>` : ''}
         </div>`).join('')}
       <div class="rnote">✓ pins a low-confidence match where it is. Taxes rows are informational — quarterly payments cover many trips; add a per-trip accrual instead.</div>
     </div></div>`;
@@ -1031,19 +1083,51 @@ function renderReview(r) {
 async function moveTxn(txnId, tripId) {
   try {
     await apiSend(`/api/txns/${txnId}/assign`, { trip_id: tripId });
-    toast(tripId === null ? 'Unassigned' : 'Moved ✓');
+    toast(tripId === null ? 'Unassigned' : tripId === 'personal' ? 'Personal — out of the P&L ✓' : 'Moved ✓');
     await loadMonth(false);
   } catch (e) { toast(e.message); }
 }
 async function loadMonth(wake) {
+  // Review is a CURRENT-state op — a closed month is a finished story, so the
+  // strip only renders (and the endpoint is only hit) on the live month.
+  const live = MONTH === CUR_MONTH;
   const [m, tr, rv] = await Promise.all([
-    api(`/api/month?month=${MONTH}`), api(`/api/trips?month=${MONTH}`), api(`/api/review`),
+    api(`/api/month?month=${MONTH}`), api(`/api/trips?month=${MONTH}`),
+    live ? api(`/api/review`) : Promise.resolve({ unmatched: [], low_confidence: [], taxes: [], deposits: [] }),
   ]);
   renderMonthHero(m, wake);
   renderMonthCost(m);
   renderSplit({ business_miles: m.business_miles, personal_miles: Math.max(0, (m.odo_miles || 0) - (m.business_miles || 0)) });
+  $('miPerSpend').textContent = (m.personal_total > 0) ? ` · ${fmt(m.personal_total)}` : '';
   renderTrips(tr);
   renderReview(rv);
+  updateMonthNav();
+}
+
+// ── month stepper (#567) — walk back to any closed month ≥ the fresh-start line ──
+const ymAdd = (ym, delta) => {
+  const d = new Date(ym + '-15T12:00:00'); d.setMonth(d.getMonth() + delta);
+  return d.toLocaleDateString('sv-SE').slice(0, 7);
+};
+function updateMonthNav() {
+  const monthMode = PERIOD === 'month';
+  const past = MONTH !== CUR_MONTH;
+  ['miMPrev', 'miMNext'].forEach(id => { $(id).style.display = monthMode ? '' : 'none'; });
+  $('miMPrev').disabled = MONTH <= MONTH_FLOOR;
+  $('miMNext').disabled = !past;
+  const chip = $('miMonthChip');
+  chip.classList.toggle('past', past);
+  chip.textContent = past
+    ? new Date(MONTH + '-15T12:00:00').toLocaleDateString('en-US',
+        { month: 'short', year: MONTH.slice(0, 4) === CUR_MONTH.slice(0, 4) ? undefined : '2-digit' })
+    : 'Month';
+}
+async function stepMonth(delta) {
+  const next = ymAdd(MONTH, delta);
+  if (next < MONTH_FLOOR || next > CUR_MONTH) return;
+  MONTH = next; OPEN_TRIP = null; _histCache.clear();
+  updateMonthNav();
+  try { await loadMonth(false); } catch (e) { toast('Backend unreachable'); }
 }
 async function refreshLoads() {
   if (sessionStorage.getItem('mi_loads_refreshed')) return;
@@ -1062,7 +1146,7 @@ $('miTripList').addEventListener('click', async (e) => {
     sel.innerHTML = tripOptions();
     sel.addEventListener('change', () => {
       const v = sel.value; if (!v) return;
-      moveTxn(Number(move.dataset.move), v === 'null' ? null : Number(v));
+      moveTxn(Number(move.dataset.move), v === 'null' ? null : v === 'personal' ? 'personal' : Number(v));
     });
     move.replaceWith(sel); sel.focus();
     return;
@@ -1097,12 +1181,29 @@ $('miTripList').addEventListener('click', async (e) => {
     catch (err) { toast(err.message); }
     return;
   }
+  const ren = e.target.closest('[data-rename]');
+  if (ren) {   // #561 — hand names survive merge/split; empty reverts to auto
+    const id = Number(ren.dataset.rename);
+    const cur = (TRIPS.find(x => x.id === id) || {}).name || '';
+    const name = prompt('Trip name (leave empty to restore the auto name):', cur);
+    if (name === null) return;
+    try {
+      const d = await apiSend(`/api/trips/${id}/rename`, { name: name.trim() });
+      toast(d.name_source === 'manual' ? 'Renamed ✓' : 'Auto name restored');
+      await loadMonth(false);
+    } catch (err) { toast(err.message); }
+    return;
+  }
   const head = e.target.closest('.mi-trip .head');
   if (head) {
-    const card = head.closest('.mi-trip'), id = Number(card.dataset.id);
+    const card = head.closest('.mi-trip');
+    const id = card.dataset.id === 'personal' ? 'personal' : Number(card.dataset.id);
     const opening = !card.classList.contains('open');
     document.querySelectorAll('.mi-trip.open').forEach(c => c.classList.remove('open'));
-    if (opening) { card.classList.add('open'); OPEN_TRIP = id; loadTripDetail(id); }
+    if (opening) {
+      card.classList.add('open'); OPEN_TRIP = id;
+      id === 'personal' ? renderPersonalDetail() : loadTripDetail(id);
+    }
     else OPEN_TRIP = null;
   }
 });
@@ -1124,7 +1225,7 @@ $('miReview').addEventListener('click', (e) => {
     sel.innerHTML = tripOptions(mv.dataset.cur ? Number(mv.dataset.cur) : undefined);
     sel.addEventListener('change', () => {
       const v = sel.value; if (!v) return;
-      moveTxn(Number(mv.dataset.rmoveBtn), v === 'null' ? null : Number(v));
+      moveTxn(Number(mv.dataset.rmoveBtn), v === 'null' ? null : v === 'personal' ? 'personal' : Number(v));
     });
     mv.replaceWith(sel); sel.focus();
     return;
@@ -1137,6 +1238,7 @@ let _cold = true;
 async function loadAll() {
   if (!API_URL) { $('miConfig').classList.add('show'); return; }
   const monthMode = PERIOD === 'month';
+  updateMonthNav();
   $('miTrips').style.display = monthMode ? '' : 'none';
   document.querySelector('.mi-floor-set').style.display = monthMode ? 'none' : '';
   if (!monthMode) {   // restore the cost-mode hero chrome
@@ -1145,6 +1247,7 @@ async function loadAll() {
     $('miLoaded').hidden = true;
     $('miFloorPill').style.display = '';
     $('miRunNet').style.display = 'none';
+    $('miPerSpend').textContent = '';   // month-scoped $ must not haunt week/30d/90d
   }
   try {
     if (monthMode) {
@@ -1247,11 +1350,14 @@ $('miCamera').addEventListener('change', async (e) => {
   }
 });
 
-// ── period chips ──
+// ── period chips + month stepper ──
 $('miPeriods').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.nav) { stepMonth(Number(b.dataset.nav)); return; }
+  if (!b.dataset.p) return;
+  MONTH = CUR_MONTH;                 // any chip tap (incl. Month itself) returns to now
   PERIOD = b.dataset.p;
-  $('miPeriods').querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+  $('miPeriods').querySelectorAll('button[data-p]').forEach(x => x.classList.toggle('active', x === b));
   loadAll();
 });
 
@@ -1342,7 +1448,8 @@ $('miVer').addEventListener('click', async () => {
     if (reg) await reg.update();                    // controllerchange → auto-reload (bikPwa)
     const keys = await (caches?.keys?.() ?? []);
     const active = keys.filter(k => k.startsWith('mileage-insights')).join(', ') || 'none';
-    setTimeout(() => toast(`Shell v10 · cache ${active.replace(/mileage-insights-/g, '')}`), 900);
+    // read the pill, don't hardcode — a second version string WILL drift (v10 did)
+    setTimeout(() => toast(`Shell ${$('miVer').textContent} · cache ${active.replace(/mileage-insights-/g, '')}`), 900);
   } catch (e) { toast('Update check failed'); }
 });
 
