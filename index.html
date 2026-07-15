@@ -171,8 +171,9 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 .mi-status[data-state="over"] .mi-badge{color:var(--color-danger);background:color-mix(in oklch,var(--color-danger),transparent 88%);border-color:color-mix(in oklch,var(--color-danger),transparent 66%)}
 .mi-status[data-state="over"] .mi-delta{color:var(--color-danger)}
 
-/* Period chips — quiet */
-.mi-periods{display:flex;gap:6px;justify-content:center;margin:2px 0 12px}
+/* Period chips — quiet. wrap: the ‹ › stepper makes 7 chips in month mode —
+   without it the All chip clips off a 375px viewport (UAT catch, v17). */
+.mi-periods{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:2px 0 12px}
 .mi-periods button{
   flex:0 0 auto;background:var(--color-panel);border:1px solid var(--color-border);
   color:var(--color-fg-muted);border-radius:var(--radius-pill);padding:6px 14px;
@@ -417,7 +418,7 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 <div class="wrap">
   <header>
     <h1>Mileage Insights</h1>
-    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v16</span></div>
+    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v17</span></div>
   </header>
 
   <!-- THE CLUSTER — hero -->
@@ -1123,11 +1124,16 @@ function updateMonthNav() {
     : 'Month';
 }
 async function stepMonth(delta) {
+  const prev = MONTH;
   const next = ymAdd(MONTH, delta);
   if (next < MONTH_FLOOR || next > CUR_MONTH) return;
   MONTH = next; OPEN_TRIP = null; _histCache.clear();
-  updateMonthNav();
-  try { await loadMonth(false); } catch (e) { toast('Backend unreachable'); }
+  updateMonthNav();               // instant feedback…
+  try { await loadMonth(false); }
+  catch (e) {                     // …but never a chip that mislabels the data on screen
+    MONTH = prev; updateMonthNav();
+    toast('Backend unreachable');
+  }
 }
 async function refreshLoads() {
   if (sessionStorage.getItem('mi_loads_refreshed')) return;
