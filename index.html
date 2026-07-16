@@ -400,6 +400,25 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
   filter:blur(18px) brightness(.34);transform:scale(1.1);opacity:0;transition:opacity var(--duration-slow);pointer-events:none}
 .mi-wall.show{opacity:1}
 
+/* ── Date picker overlay for EXIF-less photos ── */
+.mi-datepick{display:none;position:fixed;inset:0;z-index:20;place-items:center;
+  background:rgba(0,0,0,.72);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.mi-datepick.show{display:grid}
+.mi-datepick .card{background:var(--color-panel);border:1px solid var(--color-border-bright);
+  border-radius:var(--radius-xl);padding:var(--space-6) var(--space-4);
+  max-width:340px;width:calc(100% - 2 * var(--space-4));text-align:center}
+.mi-datepick .card h3{margin:0 0 4px;font-size:var(--text-md);color:var(--color-fg)}
+.mi-datepick .card .hint{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-bottom:var(--space-4)}
+.mi-datepick .card input[type="datetime-local"]{width:100%;padding:12px;
+  background:var(--color-bg-soft);border:1px solid var(--color-border-bright);border-radius:var(--radius-md);
+  color:var(--color-fg);font-family:var(--font-sans);font-size:var(--text-base);
+  color-scheme:dark;-webkit-appearance:none;appearance:none}
+.mi-datepick .actions{display:flex;gap:var(--space-3);margin-top:var(--space-4)}
+.mi-datepick .actions button{flex:1;padding:12px;border:none;border-radius:var(--radius-md);
+  font-family:var(--font-sans);font-size:var(--text-sm);font-weight:600;cursor:pointer}
+.mi-datepick .btn-now{background:var(--color-elevated);color:var(--color-fg-dim)}
+.mi-datepick .btn-set{background:var(--color-primary);color:#111}
+
 /* ── Reduced motion & low-end: truth shows instantly, motion never gates it ── */
 @media (prefers-reduced-motion: reduce){
   .mi-arc{transition:none;animation:none}
@@ -414,11 +433,22 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 <body>
 <canvas id="miFx" aria-hidden="true"></canvas>
 <div class="mi-wall" id="miWall" aria-hidden="true"></div>
+<div class="mi-datepick" id="miDatePick" aria-hidden="true">
+  <div class="card">
+    <h3>When was this taken?</h3>
+    <div class="hint">No EXIF date found — pick the photo's real date</div>
+    <input type="datetime-local" id="miDateVal">
+    <div class="actions">
+      <button class="btn-now" id="miDateNow">Use now</button>
+      <button class="btn-set" id="miDateSet">Set date</button>
+    </div>
+  </div>
+</div>
 
 <div class="wrap">
   <header>
     <h1>Mileage Insights</h1>
-    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v17</span></div>
+    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v18</span></div>
   </header>
 
   <!-- THE CLUSTER — hero -->
@@ -1302,9 +1332,26 @@ async function getExifDate(file) {
     const exifr = (await import('https://cdn.jsdelivr.net/npm/exifr@7/dist/full.esm.mjs')).default;
     const x = await exifr.parse(file, ['DateTimeOriginal', 'CreateDate']);
     const dt = x?.DateTimeOriginal || x?.CreateDate;
-    if (dt instanceof Date && !isNaN(dt)) return dt;
+    if (dt instanceof Date && !isNaN(dt)) return { date: dt, hasExif: true };
   } catch (e) {}
-  return new Date();
+  return { date: new Date(), hasExif: false };
+}
+// Prompt a manual date when EXIF is missing — resolves to a Date
+function askCaptureDate(fallback) {
+  return new Promise(resolve => {
+    const overlay = $('miDatePick');
+    const inp = $('miDateVal');
+    // pre-fill with local now (ISO slice for datetime-local input)
+    const local = new Date(fallback.getTime() - fallback.getTimezoneOffset() * 60000);
+    inp.value = local.toISOString().slice(0, 16);
+    overlay.classList.add('show');
+    function done(dt) { overlay.classList.remove('show'); cleanup(); resolve(dt); }
+    function onNow()  { done(new Date()); }
+    function onSet()  { const v = inp.value ? new Date(inp.value) : new Date(); done(isNaN(v) ? new Date() : v); }
+    $('miDateNow').addEventListener('click', onNow);
+    $('miDateSet').addEventListener('click', onSet);
+    function cleanup() { $('miDateNow').removeEventListener('click', onNow); $('miDateSet').removeEventListener('click', onSet); }
+  });
 }
 $('miCamera').addEventListener('change', async (e) => {
   const file = e.target.files[0]; e.target.value = '';
@@ -1314,10 +1361,15 @@ $('miCamera').addEventListener('change', async (e) => {
   const url = URL.createObjectURL(file);
   const wall = $('miWall'); wall.style.backgroundImage = `url(${url})`; wall.classList.add('show');
 
+  // Resolve capture date — EXIF if available, else manual picker
+  const exif = await getExifDate(file);
+  let capturedAt = exif.date;
+  if (!exif.hasExif) capturedAt = await askCaptureDate(capturedAt);
+
   const btn = $('miCapture'); btn.classList.add('is-reading');
   try {
     const form = new FormData(); form.append('photo', file);
-    form.append('captured_at', (await getExifDate(file)).toISOString());
+    form.append('captured_at', capturedAt.toISOString());
     const r = await fetch(`${API_URL}/api/snap`, { method: 'POST', headers: headers(), body: form });
     const data = await r.json();
     btn.classList.remove('is-reading');
