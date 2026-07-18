@@ -126,6 +126,20 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
   filter:drop-shadow(0 0 5px hsl(var(--cpm-hue) 90% 60% / .55));
   z-index:2;pointer-events:none;
 }
+/* THE REDLINE (v18, TALLY backport #659) — the floor drawn ON the dial.
+   The scale is floor-relative (verdictState: floor ⇒ 270deg), so the line-to-
+   beat is a FIXED tick at full-deflection; the needle parking left or right
+   of it makes "did today pay" spatial before it's verbal. Same pivot geometry
+   as the needle; painted only at the rim; static, no glow — red means red. */
+.mi-redtick{
+  position:absolute;left:50%;top:5%;width:3px;height:45%;
+  background:linear-gradient(to top, transparent 0 74%, var(--color-danger) 80%, var(--color-danger) 100%);
+  border-radius:3px;transform-origin:50% 100%;
+  transform:translateX(-50%) rotate(490deg); /* 220deg start + 270deg = the floor */
+  opacity:.85;z-index:1;pointer-events:none;
+}
+.mi-cluster[data-state="idle"] .mi-redtick,
+.mi-cluster[data-state="empty"] .mi-redtick{opacity:.35}
 
 /* Center readout */
 .mi-readout{position:relative;z-index:1;display:grid;place-items:center;gap:2px;text-align:center;padding:0 12%}
@@ -418,13 +432,14 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 <div class="wrap">
   <header>
     <h1>Mileage Insights</h1>
-    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v17</span></div>
+    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v18</span></div>
   </header>
 
   <!-- THE CLUSTER — hero -->
   <section class="mi-cluster" id="miCluster" data-state="idle">
     <div class="mi-ring">
       <div class="mi-arc" aria-hidden="true"></div>
+      <div class="mi-redtick" aria-hidden="true"></div>
       <div class="mi-needle" aria-hidden="true"></div>
       <div class="mi-readout">
         <div class="cap" id="miCap">Revenue / mile</div>
@@ -626,7 +641,13 @@ const fmtMi = n => n == null ? '--' : Number(n).toLocaleString('en-US', { maximu
 // escaped before innerHTML — this page holds the bearer token in localStorage.
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+/* Latch silence (v18, TALLY backport #659): after a verdict lands, nothing on
+   screen is permitted to speak for 900ms past the settle — the payoff is the
+   quiet. Toasts inside the window defer, never drop. */
+let QUIET_UNTIL = 0;
 function toast(msg) {
+  const wait = QUIET_UNTIL - Date.now();
+  if (wait > 0) { setTimeout(() => toast(msg), wait); return; }
   const t = $('miToast'); t.textContent = msg; t.classList.add('show');
   clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2400);
 }
@@ -703,6 +724,7 @@ function paintGauge(cpm, floor, opts = {}) {
   arc.style.transition = ''; ndl.style.transition = ''; cl.style.transition = '';
   cl.style.setProperty('--cpm-angle', angle + 'deg');
   cl.style.setProperty('--cpm-hue', hue);
+  if (cpm != null) QUIET_UNTIL = Date.now() + 1600;  // settle 700 + 900 silence (#659)
   rollNumber(cpm == null ? 0 : cpm, cpm == null ? 0 : 600);
   if (cpm == null) $('miCpm').textContent = '$ —';
   if (opts.status) setStatus(null, floor, state, opts.status);
