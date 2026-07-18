@@ -393,9 +393,6 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
   transition:opacity var(--duration-normal),transform var(--duration-normal);border:1px solid var(--color-border-bright)}
 .mi-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-/* Payoff canvas */
-#miFx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:250}
-
 /* Ambient breathe — opacity only, GPU-cheap; paused when hidden/lite */
 @keyframes mi-breathe{0%,100%{opacity:1}50%{opacity:.9}}
 @keyframes mi-spin{to{--mi-btn-angle:360deg}}
@@ -409,10 +406,41 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 @keyframes mi-vt-out{to{opacity:0;transform:translateY(-4px)}}
 @keyframes mi-vt-in{from{opacity:0;transform:translateY(4px)}}
 
-/* backdrop-filter fallback for the (client-side) snap wallpaper */
-.mi-wall{position:fixed;inset:0;z-index:-1;background-size:cover;background-position:center;
-  filter:blur(18px) brightness(.34);transform:scale(1.1);opacity:0;transition:opacity var(--duration-slow);pointer-events:none}
-.mi-wall.show{opacity:1}
+/* ── THE STAGE (#661, TALLY §3 beats 0–2) — the photo IS the loading surface ──
+   Fixed overlay under the capture bar; no spinner exists in this flow. The scan
+   mask rides a registered custom prop; a browser without @property just shows
+   the photo plain — truth is never gated behind motion. Replaces the v17
+   frosted-wallpaper read (old path destroyed, migration discipline). */
+@property --mi-scan{syntax:"<percentage>";inherits:false;initial-value:-20%}
+.mi-stage{position:fixed;inset:0;z-index:5;background:#0a0a0a;display:none;
+  opacity:1;transition:opacity var(--duration-slow) var(--ease-out)}
+.mi-stage.show{display:block}
+.mi-stage.drop{opacity:0}
+.mi-stage img{width:100%;height:100%;object-fit:cover;display:block}
+.mi-stage.scanning img{
+  -webkit-mask:linear-gradient(180deg,#000 calc(var(--mi-scan) - 18%),rgba(0,0,0,.35) var(--mi-scan),#000 calc(var(--mi-scan) + 18%));
+          mask:linear-gradient(180deg,#000 calc(var(--mi-scan) - 18%),rgba(0,0,0,.35) var(--mi-scan),#000 calc(var(--mi-scan) + 18%));
+  animation:mi-scan 1.6s linear infinite}
+@keyframes mi-scan{to{--mi-scan:120%}}
+.mi-stage .readline{position:absolute;left:0;right:0;bottom:calc(96px + env(safe-area-inset-bottom));
+  padding:10px var(--space-4);background:linear-gradient(180deg,transparent,rgba(10,10,10,.85));
+  font-family:var(--font-mono);font-size:var(--text-xs);color:var(--color-fg-dim);letter-spacing:.03em}
+.mi-stage canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+/* Beat 0 — the shutter dip */
+.mi-shutter{position:fixed;inset:0;z-index:1000;background:#000;opacity:0;pointer-events:none;
+  transition:opacity 120ms var(--ease-in)}
+.mi-shutter.blink{opacity:.96}
+/* THE LATCH (#661, beat 4) — one hairline ring pulse around the gauge. Hue-honest:
+   verdict color by default, gold ONLY when the safe payoff gate opens. Opacity-only. */
+.mi-ring::after{content:"";position:absolute;inset:-6px;border-radius:50%;pointer-events:none;
+  border:1.5px solid hsl(var(--cpm-hue) 70% 52%);opacity:0}
+.mi-cluster[data-state="safe"] .mi-ring::after{border-color:var(--color-primary)}
+.mi-ring.latch::after{animation:mi-latch .5s var(--ease-out) 1}
+@keyframes mi-latch{0%{opacity:0}30%{opacity:.9}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){
+  .mi-stage.scanning img{animation:none;-webkit-mask:none;mask:none}
+  .mi-ring.latch::after{animation:none}
+}
 
 /* ── THE BARN WALL (#660, TALLY spec §2) — siding raised from his own days ──
    One static canvas paint per open behind everything; the charcoal veil keeps
@@ -444,8 +472,12 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 </head>
 <body>
 <div class="mi-barn" aria-hidden="true"><canvas id="miBarnCv"></canvas></div>
-<canvas id="miFx" aria-hidden="true"></canvas>
-<div class="mi-wall" id="miWall" aria-hidden="true"></div>
+<div class="mi-shutter" id="miShutter" aria-hidden="true"></div>
+<div class="mi-stage" id="miStage" aria-hidden="true">
+  <img id="miStageImg" alt="">
+  <canvas id="miPourCv"></canvas>
+  <div class="readline mono" id="miReadline">reading the dash…</div>
+</div>
 
 <div class="wrap">
   <header>
@@ -754,8 +786,18 @@ function paintGauge(cpm, floor, opts = {}) {
   else setStatus(cpm, floor, state);
 }
 
-// ── THE WAKE — full ignition-slam + settle + verdict + payoff (snap resolve) ──
+// ── THE WAKE — settle + verdict-last + latch + silence (snap resolve) ──
+// #661: opts.noSlam springs straight from the current position to the truth —
+// after the pour there is ONE spectacle per reveal, and the pour was it.
+// The latch ring + [12,60,24] fire at land; QUIET_UNTIL then holds the 900ms
+// silence (v18 set it only on paintGauge — the wake path missed it).
 let _wakeRaf = null, _needleHandler = null;
+function latchRing() {   // beat 4 — "sorted, done." Hue-honest; gold only via [data-state=safe]
+  const ring = document.querySelector('.mi-ring');
+  ring.classList.remove('latch'); void ring.offsetWidth;
+  ring.classList.add('latch');
+  try { navigator.vibrate && navigator.vibrate([12, 60, 24]); } catch (e) {}
+}
 function wakeCluster(cpm, floor, opts = {}) {
   const cl = $('miCluster');
   const arc = cl.querySelector('.mi-arc'), ndl = cl.querySelector('.mi-needle');
@@ -777,63 +819,52 @@ function wakeCluster(cpm, floor, opts = {}) {
     requestAnimationFrame(() => { arc.style.transition = ''; ndl.style.transition = ''; });
     rollNumber(cpm, 0);
     land();
-    if (!reduce && state === 'safe' && COVERAGE_OK) payoff($('miCpm'));   // never celebrate provisional data
+    latchRing();                                  // visual dies under reduce (CSS); the haptic stays
+    QUIET_UNTIL = Date.now() + 900;               // the silence is not motion — it always applies
     return;
   }
 
-  // Beat 1 — ignition slam to full scale, no transition
-  arc.style.transition = 'none'; ndl.style.transition = 'none';
-  cl.style.setProperty('--cpm-angle', '270deg');
-  cl.style.setProperty('--cpm-hue', hue);
-  ndl.style.willChange = 'transform';
-
-  // Beat 2 — force a frame, release transition → spring back to the truth
-  _wakeRaf = requestAnimationFrame(() => _wakeRaf = requestAnimationFrame(() => {
+  if (opts.noSlam) {
+    // Post-pour land: transitions live, spring from wherever the needle idles.
     arc.style.transition = ''; ndl.style.transition = '';
+    ndl.style.willChange = 'transform';
     cl.style.setProperty('--cpm-angle', angle + 'deg');
+    cl.style.setProperty('--cpm-hue', hue);
     cl.dataset.state = state;
-    rollNumber(cpm, 900);           // odometer roll during the settle
-    _wakeRaf = null;
-  }));
+    rollNumber(cpm, 900);
+  } else {
+    // Beat 1 — ignition slam to full scale, no transition
+    arc.style.transition = 'none'; ndl.style.transition = 'none';
+    cl.style.setProperty('--cpm-angle', '270deg');
+    cl.style.setProperty('--cpm-hue', hue);
+    ndl.style.willChange = 'transform';
 
-  // Beat 3 — verdict lands last (after needle settle), payoff only when green
+    // Beat 2 — force a frame, release transition → spring back to the truth
+    _wakeRaf = requestAnimationFrame(() => _wakeRaf = requestAnimationFrame(() => {
+      arc.style.transition = ''; ndl.style.transition = '';
+      cl.style.setProperty('--cpm-angle', angle + 'deg');
+      cl.dataset.state = state;
+      rollNumber(cpm, 900);           // odometer roll during the settle
+      _wakeRaf = null;
+    }));
+  }
+  QUIET_UNTIL = Date.now() + 2300;    // settle ~900 + latch 500 + 900 enforced silence
+
+  // Beat 3 — verdict stamps dead last (after needle settle), then the latch
   _needleHandler = (e) => {
     if (e.propertyName !== 'transform') return;
     ndl.style.willChange = '';
     ndl.removeEventListener('transitionend', _needleHandler); _needleHandler = null;
     land();
-    if (state === 'safe' && COVERAGE_OK) payoff($('miCpm'));   // never celebrate provisional data
+    latchRing();
   };
   ndl.addEventListener('transitionend', _needleHandler);
   // safety net: if transitionend never fires (edge cases), land the verdict anyway
   setTimeout(() => { if (_needleHandler) { _needleHandler({ propertyName: 'transform' }); } }, 1200);
 }
 
-// ── payoff — green only, self-terminating (state + hard cap) ──
-let _fxRaf = null;
-function payoff(originEl) {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches || document.hidden) return;
-  const c = $('miFx'), ctx = c.getContext('2d');
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  c.width = innerWidth * dpr; c.height = innerHeight * dpr; ctx.scale(dpr, dpr);
-  const r = originEl.getBoundingClientRect();
-  const P = Array.from({ length: 40 }, () => ({
-    x: r.left + r.width / 2, y: r.top + r.height / 2,
-    vx: (Math.random() - .5) * 6, vy: -Math.random() * 7 - 2, life: 1
-  }));
-  const t0 = performance.now();
-  if (_fxRaf) cancelAnimationFrame(_fxRaf);
-  const draw = now => {
-    ctx.clearRect(0, 0, innerWidth, innerHeight); let alive = false;
-    for (const p of P) {
-      p.vy += .22; p.x += p.vx; p.y += p.vy; p.life -= .018;
-      if (p.life > 0) { alive = true; ctx.globalAlpha = p.life; ctx.fillStyle = 'hsl(46 78% 52%)'; ctx.fillRect(p.x, p.y, 4, 4); }
-    }
-    if (alive && now - t0 < 1500) _fxRaf = requestAnimationFrame(draw);
-    else { ctx.clearRect(0, 0, innerWidth, innerHeight); cancelAnimationFrame(_fxRaf); _fxRaf = null; }
-  };
-  _fxRaf = requestAnimationFrame(draw);
-}
+/* payoff() confetti RETIRED (#661) — spec §5 payoff doctrine: the Pour is the
+   spectacle; the latch is the celebration; the celebration is silence. */
 
 // ── mile split strip ──
 function renderSplit(s) {
@@ -1082,7 +1113,9 @@ function renderMonthHero(m, wake = false) {
     $('miFloorPill').style.display = 'none';
   } else { lo.hidden = true; $('miFloorPill').style.display = ''; }
   const v = verdictRevenue(m.gross_rpm, m.loaded_cpm);
-  (wake ? wakeCluster : paintGauge)(m.gross_rpm, FLOOR, { verdict: v, status: monthStatus(m, v.state) });
+  const opts = { verdict: v, status: monthStatus(m, v.state) };
+  if (wake === 'pour') opts.noSlam = true;   // #661 — the pour was the spectacle
+  (wake ? wakeCluster : paintGauge)(m.gross_rpm, FLOOR, opts);
 }
 
 // ── month cost card: variable + accruals + fixed = the all-in nut ──
@@ -1488,6 +1521,95 @@ async function loadAll() {
   }
 }
 
+/* ══ THE STAGE + THE POUR (#661, TALLY §3 beats 0–4) ═══════════════════════
+   Beat 0: shutter dip. Beat 1: the photo full-bleed with the scan mask while
+   the server reads — no spinner exists in this flow. Beat 2: on resolve the
+   photo dissolves into its own pixels and sorts into gold/slate streams in the
+   HONEST proportion of the split the counters land on. fillRect only, DPR≤2,
+   1100ms hard cap, one owned rAF, array nulled on exit, tap-anywhere skips,
+   hidden/reduced/LITE = instant truthful render. Beats 3–4 live in wakeCluster. */
+let _pourRaf = null, _pourFinish = null;
+function stageShow(url) {
+  $('miStageImg').src = url;
+  const st = $('miStage');
+  st.classList.remove('drop'); st.classList.add('show', 'scanning');
+  $('miShutter').classList.add('blink');
+  try { navigator.vibrate && navigator.vibrate([10]); } catch (e) {}
+  setTimeout(() => $('miShutter').classList.remove('blink'), 140);
+}
+function stageDrop() {
+  const st = $('miStage');
+  st.classList.remove('scanning'); st.classList.add('drop');
+  setTimeout(() => { st.classList.remove('show', 'drop'); $('miStageImg').src = ''; }, 420);
+}
+function runPour(bizRatio) {
+  return new Promise(resolve => {
+    $('miStage').classList.remove('scanning');   // scan XOR pour — killed the frame we resolve
+    const img = $('miStageImg');
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || document.hidden || LITE || !img.naturalWidth) return resolve();
+    const W = innerWidth, H = innerHeight;
+    if (!W || !H) return resolve();
+    const cv = $('miPourCv'), dpr = Math.min(devicePixelRatio || 1, 2);
+    cv.width = W * dpr; cv.height = H * dpr;
+    const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+    const scv = document.createElement('canvas');
+    const sr = Math.min(1, 320 / Math.max(img.naturalWidth, img.naturalHeight));
+    scv.width = Math.round(img.naturalWidth * sr); scv.height = Math.round(img.naturalHeight * sr);
+    scv.getContext('2d').drawImage(img, 0, 0, scv.width, scv.height);
+    let data;
+    try { data = scv.getContext('2d').getImageData(0, 0, scv.width, scv.height).data; }
+    catch (e) { return resolve(); }               // tainted/no canvas → crossfade floor
+    const step = W < 400 ? 8 : 6;
+    let P = [];
+    const sx = W / scv.width, sy = H / scv.height;
+    for (let y = 0; y < scv.height; y += step) for (let x = 0; x < scv.width; x += step) {
+      const i = (y * scv.width + x) * 4; if (data[i + 3] < 120) continue;
+      P.push({ x: x * sx, y: y * sy, r: data[i], g: data[i + 1], b: data[i + 2],
+        biz: Math.random() < bizRatio, delay: (y / scv.height) * 260 + Math.random() * 120 });
+    }
+    img.style.opacity = 0;
+    const t0 = performance.now();
+    const bizA = { x: W * .22, y: H + 20 }, perA = { x: W * .78, y: H + 20 };
+    const gold = [229, 181, 36], slate = [107, 114, 128];
+    const skip = () => finish();                  // a tired driver outranks the cinema
+    function finish() {
+      if (_pourRaf) { cancelAnimationFrame(_pourRaf); _pourRaf = null; }
+      _pourFinish = null; P = null;
+      ctx.clearRect(0, 0, W, H); img.style.opacity = '';
+      document.removeEventListener('pointerdown', skip);
+      resolve();
+    }
+    _pourFinish = finish;
+    document.addEventListener('pointerdown', skip, { once: true });
+    const frame = now => {
+      if (!P) return;
+      const el = now - t0;
+      if (el > 1100) { finish(); return; }        // hard cap — never longer
+      ctx.clearRect(0, 0, W, H);
+      let allDone = true;
+      for (let k = 0; k < P.length; k++) {
+        const p = P[k];
+        const t = Math.min(1, Math.max(0, (el - p.delay) / 850));
+        if (t < 1) allDone = false;
+        const e = 1 - Math.pow(1 - t, 3);
+        const A = p.biz ? bizA : perA;
+        const px = p.x + (A.x - p.x) * e, py = p.y + (A.y - p.y) * e;
+        let c = [p.r, p.g, p.b];
+        if (t > .75) {                            // streams take on meaning as they land
+          const m = (t - .75) / .25, tc = p.biz ? gold : slate;
+          c = [p.r + (tc[0] - p.r) * m, p.g + (tc[1] - p.g) * m, p.b + (tc[2] - p.b) * m];
+        }
+        ctx.fillStyle = 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
+        ctx.fillRect(px, py, 2.5, 2.5);
+      }
+      if (allDone) { finish(); return; }
+      _pourRaf = requestAnimationFrame(frame);
+    };
+    _pourRaf = requestAnimationFrame(frame);
+  });
+}
+
 // ── capture flow — the signature moment ──
 // EXIF capture date: a gallery pick or delayed upload must be stamped when the
 // PHOTO was taken, not when it was uploaded — otherwise out-of-order uploads
@@ -1505,9 +1627,9 @@ $('miCamera').addEventListener('change', async (e) => {
   const file = e.target.files[0]; e.target.value = '';
   if (!file || !API_URL) { if (!API_URL) toast('Connect a backend first'); return; }
 
-  // frosted wallpaper from the shot you just took (glass-over-source, client-side)
+  // Beats 0–1 (#661): shutter dip, then the photo IS the loading surface
   const url = URL.createObjectURL(file);
-  const wall = $('miWall'); wall.style.backgroundImage = `url(${url})`; wall.classList.add('show');
+  stageShow(url);
 
   const btn = $('miCapture'); btn.classList.add('is-reading');
   try {
@@ -1516,36 +1638,52 @@ $('miCamera').addEventListener('change', async (e) => {
     const r = await fetch(`${API_URL}/api/snap`, { method: 'POST', headers: headers(), body: form });
     const data = await r.json();
     btn.classList.remove('is-reading');
-    if (!r.ok) { toast(data.error || 'Vision failed'); wall.classList.remove('show'); return; }
+    if (!r.ok) { stageDrop(); toast(data.error || 'Vision failed'); return; }
 
-    // fold in the fresh split, pull the truth for the mode, then WAKE
-    const monthMode = PERIOD === 'month';
-    if (data.split && !monthMode) renderSplit(data.split);
-    let cpmResp = null;
-    if (!monthMode) {
-      try { cpmResp = await api(`/api/cpm?period=${PERIOD}`); renderCost(cpmResp); } catch (_) {}
-      api(`/api/insights?period=${PERIOD}`).then(renderSplit).catch(() => {});
-    }
     api(`/api/snaps?limit=40`).then(h => renderHistory(h.snaps)).catch(() => {});
     if (data.snap && data.snap.id) boardIn(data.snap, url);   // #660 — today's board goes up
 
+    const monthMode = PERIOD === 'month';
     if (data.split && data.split.need_more) {
+      stageDrop();                                    // a baseline has nothing to sort — no pour
       $('miCluster').dataset.state = 'empty';
       setStatus(null, FLOOR, 'idle', { label: 'Baseline set — snap again' });
       toast('Baseline logged ✓');
     } else if (monthMode) {
-      await loadMonth(true);                          // ignition slam on the month truth
-      toast('Read ✓');
+      // Beat 2 truth-first: pour proportion = the split the counters land on.
+      // (/api/month is re-fetched inside loadMonth — cheap on loopback/tailnet,
+      // and the land then renders from the freshest full payload.)
+      let ratio = -1;
+      try {
+        const m = await api(`/api/month?month=${MONTH}`);
+        const per = Math.max(0, (m.odo_miles || 0) - (m.business_miles || 0));
+        const tot = (m.business_miles || 0) + per;
+        if (tot > 0) ratio = (m.business_miles || 0) / tot;
+      } catch (_) {}
+      if (ratio >= 0) await runPour(ratio);
+      stageDrop();
+      await loadMonth('pour');                        // beats 3–4: land, verdict-last, latch, silence
+      toast('Read ✓');                                // defers past QUIET_UNTIL by design
     } else {
+      if (data.split) renderSplit(data.split);
+      let cpmResp = null, ratio = -1;
+      try { cpmResp = await api(`/api/cpm?period=${PERIOD}`); renderCost(cpmResp); } catch (_) {}
+      try {
+        const ins = await api(`/api/insights?period=${PERIOD}`);
+        renderSplit(ins);
+        const tot = (ins.business_miles || 0) + (ins.personal_miles || 0);
+        if (tot > 0) ratio = (ins.business_miles || 0) / tot;
+      } catch (_) {}
+      if (ratio >= 0) await runPour(ratio);
+      stageDrop();
       const cpmVal = cpmResp ? cpmResp.variable_cpm : null;
-      wakeCluster(cpmVal, FLOOR);
+      wakeCluster(cpmVal, FLOOR, { noSlam: true });
       if (cpmVal == null && cpmResp && cpmResp.variable_total > 0)   // measuring: real spend, miles don't span it
         setStatus(null, FLOOR, 'idle', { label: 'Measuring', delta: fmt(cpmResp.variable_total) + ' road' });
       toast('Read ✓');
     }
-    setTimeout(() => wall.classList.remove('show'), 2600);
   } catch (err) {
-    btn.classList.remove('is-reading'); wall.classList.remove('show');
+    btn.classList.remove('is-reading'); stageDrop();
     toast('Connection failed');
   } finally {
     setTimeout(() => URL.revokeObjectURL(url), 4000);
@@ -1668,7 +1806,10 @@ hdr.addEventListener('pointerdown', () => { _pt = setTimeout(() => {
 document.addEventListener('visibilitychange', () => {
   const hidden = document.hidden;
   document.documentElement.classList.toggle('is-hidden', hidden);
-  if (hidden) { if (_wakeRaf) cancelAnimationFrame(_wakeRaf); if (_fxRaf) cancelAnimationFrame(_fxRaf); }
+  if (hidden) {
+    if (_wakeRaf) cancelAnimationFrame(_wakeRaf);
+    if (_pourFinish) _pourFinish();   // #661 — snap mid-flight to final; one correct static frame
+  }
   else paintBarn();   // #660 — a wall skipped while backgrounded paints now (sig-guarded, cheap)
 });
 
@@ -1679,7 +1820,7 @@ paintBarn();   // #660 — wall rises from IndexedDB even before (or without) th
 // Debug bridge — lets QA drive the exact production reveal code in-browser.
 // No secrets, read-only wrappers; harmless in prod (survival tool, not sensitive).
 window.__mi = { wakeCluster, paintGauge, verdictState, renderSplit, renderCost, renderHistory, setStatus, setFloor,
-  paintBarn, slatAll, backfillSlats,
+  paintBarn, slatAll, backfillSlats, stageShow, stageDrop, runPour,
   get state(){ return { API_URL, PERIOD, FLOOR, LAST_SPLIT, cpm: $('miCpm').dataset.v }; } };
 </script>
 </body>
