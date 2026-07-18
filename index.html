@@ -414,6 +414,23 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
   filter:blur(18px) brightness(.34);transform:scale(1.1);opacity:0;transition:opacity var(--duration-slow);pointer-events:none}
 .mi-wall.show{opacity:1}
 
+/* ── THE BARN WALL (#660, TALLY spec §2) — siding raised from his own days ──
+   One static canvas paint per open behind everything; the charcoal veil keeps
+   it texture, never collage. Slats are 96×28 timber cuts of real dash photos,
+   cached in IndexedDB (rebuildable from :8560). Adds ZERO gold by law. */
+.mi-barn{position:fixed;inset:0;z-index:-1;overflow:hidden;background:var(--color-bg);pointer-events:none}
+.mi-barn canvas{width:100%;height:100%;display:block}
+.mi-barn::after{content:"";position:absolute;inset:0;background:rgba(15,15,15,.94)}
+/* Fresh row — current week's boards (Mon→Sun) as real DOM. Missed days stay
+   flat #141414: rhythm kept, zero gap-shaming. */
+.mi-fresh{display:flex;gap:2px;height:22px;margin:8px 0 0;border:1px solid var(--color-border);
+  border-radius:var(--radius-md);overflow:hidden;background:var(--color-bg-soft)}
+.mi-fresh .slat{flex:1;background:#141414;border-right:1px solid rgba(0,0,0,.55);min-width:0}
+.mi-fresh .slat:last-child{border-right:0}
+.mi-fresh .slat img{width:100%;height:100%;object-fit:cover;filter:saturate(.25) brightness(.55);display:block}
+.mi-boardline{font-family:var(--font-mono);font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--color-fg-subtle);margin-top:4px}
+
 /* ── Reduced motion & low-end: truth shows instantly, motion never gates it ── */
 @media (prefers-reduced-motion: reduce){
   .mi-arc{transition:none;animation:none}
@@ -426,14 +443,19 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 </style>
 </head>
 <body>
+<div class="mi-barn" aria-hidden="true"><canvas id="miBarnCv"></canvas></div>
 <canvas id="miFx" aria-hidden="true"></canvas>
 <div class="mi-wall" id="miWall" aria-hidden="true"></div>
 
 <div class="wrap">
   <header>
     <h1>Mileage Insights</h1>
-    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v18</span></div>
+    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v19</span></div>
   </header>
+
+  <!-- THE BARN WALL fresh row (#660) — this week's boards, one per parked day -->
+  <div class="mi-fresh" id="miFresh" aria-hidden="true"></div>
+  <div class="mi-boardline" id="miBoardLine">BOARD —</div>
 
   <!-- THE CLUSTER — hero -->
   <section class="mi-cluster" id="miCluster" data-state="idle">
@@ -572,6 +594,7 @@ function bikPwa(opts = {}) {
         await Promise.all(regs.map(r => r.unregister()));
         const keys = await (caches?.keys?.() ?? []);
         await Promise.all(keys.map(k => caches.delete(k)));
+        indexedDB.deleteDatabase('mi-insights');   // MI: barn-wall slat cache (#660)
       } catch (e) {}
       location.replace(location.pathname);
     })();
@@ -875,6 +898,154 @@ function renderHistory(snaps) {
     </div>`;
   }).join('');
 }
+
+/* ══ THE BARN WALL (#660, TALLY spec §2) ═══════════════════════════════════
+   Every logged day nails one board — a 96×28 siding slat cut from that day's
+   own dash photo — onto a wall that exists nowhere but this phone. Forward
+   snaps slat client-side at capture (zero extra network); history backfills
+   once via GET /api/snaps/<id>/thumb into IndexedDB and never refetches
+   (404 = photo gone → tombstone, never re-asked). One static paint per open;
+   repaint only when the board set changes. Never delays first data paint. */
+const SLAT_W = 96, SLAT_H = 28;
+let _bdb = null;
+function barnDb() {
+  return new Promise((res, rej) => {
+    if (_bdb) return res(_bdb);
+    const rq = indexedDB.open('mi-insights', 1);
+    rq.onupgradeneeded = () => {
+      const d = rq.result;
+      if (!d.objectStoreNames.contains('slats')) d.createObjectStore('slats', { keyPath: 'id' });
+    };
+    rq.onsuccess = () => { _bdb = rq.result; res(_bdb); };
+    rq.onerror = () => rej(rq.error);
+  });
+}
+const slatStore = mode => barnDb().then(d => d.transaction('slats', mode).objectStore('slats'));
+const slatAll = () => slatStore('readonly').then(s => new Promise(res => {
+  const r = s.getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => res([]);
+})).catch(() => []);
+const slatPut = rec => slatStore('readwrite').then(s => new Promise(res => {
+  const r = s.put(rec); r.onsuccess = res; r.onerror = res;
+})).catch(() => {});
+const slatDel = id => slatStore('readwrite').then(s => new Promise(res => {
+  const r = s.delete(id); r.onsuccess = res; r.onerror = res;
+})).catch(() => {});
+
+// local calendar day of a stored UTC captured_at — boards are DAYS, not snaps
+const slatDay = ts => {
+  const raw = String(ts || '');
+  const d = new Date(raw.replace(' ', 'T') + (raw.includes('Z') || raw.includes('+') ? '' : 'Z'));
+  return isNaN(d) ? raw.slice(0, 10) : d.toLocaleDateString('sv-SE');
+};
+// TALLY's siding recipe, verbatim — the ONE place a photo becomes timber
+function makeSlat(img) {
+  const s = document.createElement('canvas'); s.width = SLAT_W; s.height = SLAT_H;
+  const c = s.getContext('2d');
+  try { c.filter = 'saturate(.22) brightness(.5) contrast(.9)'; } catch (e) {}
+  c.drawImage(img, 0, 0, SLAT_W, SLAT_H);
+  return s.toDataURL('image/jpeg', .5);
+}
+const loadImg = src => new Promise((res, rej) => {
+  const im = new Image();
+  im.onload = () => res(im); im.onerror = rej;
+  im.src = src;
+});
+// one board per local day (latest snap of the day wins), oldest first
+function boardsFrom(slats) {
+  const byDay = new Map();
+  slats.filter(s => s.slat).sort((a, b) => (a.ts < b.ts ? -1 : 1))
+       .forEach(s => byDay.set(s.day, s));
+  return [...byDay.values()].sort((a, b) => (a.day < b.day ? -1 : 1));
+}
+
+let _barnSig = null,   // canvas repaints only when the board set actually changes
+    _barnQ = Promise.resolve();
+function paintBarn(force) {   // serialized — a late-resolving call can never overpaint newer state
+  return _barnQ = _barnQ.then(() => _paintBarnNow(force)).catch(() => {});
+}
+async function _paintBarnNow(force) {
+  const boards = boardsFrom(await slatAll());
+  paintFresh(boards);
+  $('miBoardLine').textContent = 'BOARD ' + boards.length;
+  const w = innerWidth, h = innerHeight;
+  if (!w || !h) { _barnSig = null; return; }   // backgrounded/pre-layout: a 0×0 paint would
+                                               // lock in a blank wall — stay dirty instead
+  const sig = boards.map(b => b.day).join(',');
+  if (sig === _barnSig && !force) return;
+  _barnSig = sig;
+  const cv = $('miBarnCv'), dpr = Math.min(devicePixelRatio || 1, 2);
+  cv.width = w * dpr; cv.height = h * dpr;
+  const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+  ctx.fillStyle = '#0f0f0f'; ctx.fillRect(0, 0, w, h);
+  const slatH = 26, gap = 1, perRow = 7, rows = Math.ceil(h / (slatH + gap));
+  const deck = boards.slice(-perRow * 13);          // ~13-week display cap; data never deleted
+  if (!deck.length) {                               // bare timber framing (cold open)
+    ctx.strokeStyle = 'rgba(107,114,128,.18)'; ctx.setLineDash([6, 8]);
+    for (let r = 0; r < rows; r++) ctx.strokeRect(8, r * (slatH + gap) + 8, w - 16, slatH);
+    return;
+  }
+  const imgs = await Promise.all(deck.map(b => loadImg(b.slat).catch(() => null)));
+  let i = 0;                                        // oldest bottom-left, like real courses
+  for (let r = rows - 1; r >= 0 && i < deck.length; r--) {
+    for (let c = 0; c < perRow && i < deck.length; c++, i++) {
+      const sw = w / perRow, x = c * sw, y = r * (slatH + gap), im = imgs[i];
+      if (im && im.naturalWidth) ctx.drawImage(im, x, y, sw - 1, slatH);
+      else { ctx.fillStyle = '#141414'; ctx.fillRect(x, y, sw - 1, slatH); }
+    }
+  }
+}
+// current week Mon→Sun as real DOM; missed days stay flat
+function paintFresh(boards) {
+  const el = $('miFresh'); el.innerHTML = '';
+  const now = new Date(); const mon = new Date(now);
+  mon.setHours(0, 0, 0, 0); mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(mon); day.setDate(mon.getDate() + i);
+    const key = day.toLocaleDateString('sv-SE');
+    const b = boards.find(x => x.day === key);
+    const d = document.createElement('div'); d.className = 'slat';
+    if (b) { const im = document.createElement('img'); im.src = b.slat; im.alt = ''; d.appendChild(im); }
+    el.appendChild(d);
+  }
+}
+// history backfill — one thumb fetch per un-slatted snap, ever
+let _backfilling = false;
+async function backfillSlats(snaps) {
+  if (_backfilling || !API_URL) return;
+  _backfilling = true;
+  try {
+    const have = new Set((await slatAll()).map(s => s.id));
+    const want = (snaps || []).filter(s => s.photo_path && !have.has(s.id));
+    let added = 0;
+    for (const s of want) {
+      try {
+        const r = await fetch(`${API_URL}/api/snaps/${s.id}/thumb`, { headers: headers() });
+        if (r.status === 404) {   // photo gone from disk — tombstone so we never re-ask
+          await slatPut({ id: s.id, day: slatDay(s.captured_at), ts: s.captured_at, slat: null });
+          continue;
+        }
+        if (!r.ok) continue;      // transient (503/offline) — next open retries
+        const url = URL.createObjectURL(await r.blob());
+        try {
+          const im = await loadImg(url);
+          await slatPut({ id: s.id, day: slatDay(s.captured_at), ts: s.captured_at, slat: makeSlat(im) });
+          added++;
+        } finally { URL.revokeObjectURL(url); }
+      } catch (e) { /* transient — next open retries */ }
+    }
+    if (added) await paintBarn();
+  } finally { _backfilling = false; }
+}
+// forward pipeline — slat the photo you JUST snapped, straight from the file
+async function boardIn(snap, objUrl) {
+  try {
+    const im = await loadImg(objUrl);
+    await slatPut({ id: snap.id, day: slatDay(snap.captured_at), ts: snap.captured_at, slat: makeSlat(im) });
+    await paintBarn();
+  } catch (e) { /* thumb backfill catches it next open */ }
+}
+let _barnRsz;
+window.addEventListener('resize', () => { clearTimeout(_barnRsz); _barnRsz = setTimeout(() => paintBarn(true), 200); });
 
 // ── POST/DELETE helper (assign, extras, merge, split, confirm, refresh) ──
 async function apiSend(path, body, method = 'POST') {
@@ -1282,6 +1453,7 @@ async function loadAll() {
       await refreshLoads();
       const hist = await api(`/api/snaps?limit=40`);
       renderHistory(hist.snaps);
+      paintBarn(); backfillSlats(hist.snaps);   // #660 — never blocks the data paint
       await loadMonth(false);
       _cold = false;
       return;
@@ -1294,6 +1466,7 @@ async function loadAll() {
     renderSplit(ins);
     renderCost(cpm);
     renderHistory(hist.snaps);
+    paintBarn(); backfillSlats(hist.snaps);   // #660 — never blocks the data paint
     if (ins.need_more) {
       const cl = $('miCluster');
       cl.dataset.state = 'empty';
@@ -1354,6 +1527,7 @@ $('miCamera').addEventListener('change', async (e) => {
       api(`/api/insights?period=${PERIOD}`).then(renderSplit).catch(() => {});
     }
     api(`/api/snaps?limit=40`).then(h => renderHistory(h.snaps)).catch(() => {});
+    if (data.snap && data.snap.id) boardIn(data.snap, url);   // #660 — today's board goes up
 
     if (data.split && data.split.need_more) {
       $('miCluster').dataset.state = 'empty';
@@ -1436,6 +1610,7 @@ $('miHist').addEventListener('click', async (e) => {
     const r = await fetch(`${API_URL}/api/snaps/${id}`, { method: 'DELETE', headers: headers() });
     if (!r.ok) { toast('Delete failed'); return; }
     toast('Snap deleted');
+    slatDel(Number(id)).then(() => paintBarn());   // #660 — the board comes down too
     loadAll();
   } catch { toast('Connection failed'); }
 });
@@ -1494,14 +1669,17 @@ document.addEventListener('visibilitychange', () => {
   const hidden = document.hidden;
   document.documentElement.classList.toggle('is-hidden', hidden);
   if (hidden) { if (_wakeRaf) cancelAnimationFrame(_wakeRaf); if (_fxRaf) cancelAnimationFrame(_fxRaf); }
+  else paintBarn();   // #660 — a wall skipped while backgrounded paints now (sig-guarded, cheap)
 });
 
 // ── go ──
 loadAll();
+paintBarn();   // #660 — wall rises from IndexedDB even before (or without) the API
 
 // Debug bridge — lets QA drive the exact production reveal code in-browser.
 // No secrets, read-only wrappers; harmless in prod (survival tool, not sensitive).
 window.__mi = { wakeCluster, paintGauge, verdictState, renderSplit, renderCost, renderHistory, setStatus, setFloor,
+  paintBarn, slatAll, backfillSlats,
   get state(){ return { API_URL, PERIOD, FLOOR, LAST_SPLIT, cpm: $('miCpm').dataset.v }; } };
 </script>
 </body>
