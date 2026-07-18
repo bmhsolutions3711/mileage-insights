@@ -448,7 +448,9 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
    cached in IndexedDB (rebuildable from :8560). Adds ZERO gold by law. */
 .mi-barn{position:fixed;inset:0;z-index:-1;overflow:hidden;background:var(--color-bg);pointer-events:none}
 .mi-barn canvas{width:100%;height:100%;display:block}
-.mi-barn::after{content:"";position:absolute;inset:0;background:rgba(15,15,15,.94)}
+.mi-barn::after{content:"";position:absolute;inset:0;background:rgba(15,15,15,.92)}
+/* ^ veil at the LAW'S floor (spec §2: 92–96%) — a young wall is one course;
+   at .94 it sat under the perception floor (device UAT). Still texture. */
 /* Fresh row — current week's boards (Mon→Sun) as real DOM. Missed days stay
    flat #141414: rhythm kept, zero gap-shaming. */
 .mi-fresh{display:flex;gap:2px;height:22px;margin:8px 0 0;border:1px solid var(--color-border);
@@ -482,7 +484,7 @@ header .sub{font-size:var(--text-xs);color:var(--color-fg-subtle);margin-top:2px
 <div class="wrap">
   <header>
     <h1>Mileage Insights</h1>
-    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v19</span></div>
+    <div class="sub">Snap the dash. The cluster wakes. <span class="mi-ver" id="miVer" role="button" title="Tap to check for update">v20</span></div>
   </header>
 
   <!-- THE BARN WALL fresh row (#660) — this week's boards, one per parked day -->
@@ -1008,18 +1010,40 @@ async function _paintBarnNow(force) {
   cv.width = w * dpr; cv.height = h * dpr;
   const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
   ctx.fillStyle = '#0f0f0f'; ctx.fillRect(0, 0, w, h);
-  const slatH = 26, gap = 1, perRow = 7, rows = Math.ceil(h / (slatH + gap));
+  // MI's column is a dense card stack — solid panels cover everything except
+  // the top band (header) and the side margins, so TALLY's bottom-up courses
+  // were invisible here (Bryan device UAT, v19 day one: "looks the same").
+  // The deck anchors TOP-DOWN instead: boards accumulate from the top edge,
+  // behind the title — the app's name stands on his own days. Courses still
+  // stop above the capture bar.
+  const capH = (document.querySelector('.mi-capbar') || {}).offsetHeight || 96;
+  const slatH = 26, gap = 1, perRow = 7,
+        rows = Math.max(1, Math.floor((h - capH) / (slatH + gap)));
   const deck = boards.slice(-perRow * 13);          // ~13-week display cap; data never deleted
+  // Timber strokes must be BRIGHT: the 94% veil crushes everything to ~6% —
+  // a .18-alpha grey dash lands under 2/255 post-veil (invisible). fg-dim at
+  // .6 survives at the same whisper level as the slats' own highlights.
+  const timber = 'rgba(176,176,176,.6)';
   if (!deck.length) {                               // bare timber framing (cold open)
-    ctx.strokeStyle = 'rgba(107,114,128,.18)'; ctx.setLineDash([6, 8]);
+    ctx.strokeStyle = timber; ctx.setLineDash([6, 8]);
     for (let r = 0; r < rows; r++) ctx.strokeRect(8, r * (slatH + gap) + 8, w - 16, slatH);
     return;
   }
   const imgs = await Promise.all(deck.map(b => loadImg(b.slat).catch(() => null)));
-  let i = 0;                                        // oldest bottom-left, like real courses
-  for (let r = rows - 1; r >= 0 && i < deck.length; r--) {
+  // Young wall: frame the working rows in bare timber so the structure reads
+  // while boards are few — the barn mid-raise. Boards nail into their slots.
+  const sw = w / perRow;
+  // frame the working rows + one empty course below — the next boards' home
+  const frameRows = Math.min(rows, Math.ceil(deck.length / perRow) + 1);
+  ctx.strokeStyle = timber; ctx.setLineDash([5, 7]); ctx.lineWidth = 1;
+  for (let r = 0; r < frameRows; r++) for (let c = 0; c < perRow; c++) {
+    ctx.strokeRect(c * sw + 1.5, r * (slatH + gap) + 1.5, sw - 4, slatH - 3);
+  }
+  ctx.setLineDash([]);
+  let i = 0;                                        // oldest top-left; the wall reads like a ledger
+  for (let r = 0; r < rows && i < deck.length; r++) {
     for (let c = 0; c < perRow && i < deck.length; c++, i++) {
-      const sw = w / perRow, x = c * sw, y = r * (slatH + gap), im = imgs[i];
+      const x = c * sw, y = r * (slatH + gap), im = imgs[i];
       if (im && im.naturalWidth) ctx.drawImage(im, x, y, sw - 1, slatH);
       else { ctx.fillStyle = '#141414'; ctx.fillRect(x, y, sw - 1, slatH); }
     }
